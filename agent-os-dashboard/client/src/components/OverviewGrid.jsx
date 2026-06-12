@@ -280,10 +280,73 @@ export default function OverviewGrid({ onSelectSession }) {
                 </div>
               </div>
 
+              {/* Antigravity Permissions */}
+              <div style={{ flex: 1 }}>
+                <h4 style={{ color: 'var(--rust)', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ background: 'rgba(196, 122, 106, 0.1)', padding: '0.2rem 0.6rem', borderRadius: 'var(--radius-sm)' }}>Security Scopes</span>
+                </h4>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  {capabilities.antigravity.permissions?.length > 0 ? capabilities.antigravity.permissions.map(perm => {
+                    const isCmd = perm.startsWith('command');
+                    return (
+                      <div key={perm} style={{ background: 'var(--bg-deep)', border: `1px solid ${isCmd ? 'var(--moss)' : 'var(--slate)'}`, padding: '0.4rem 0.8rem', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', fontSize: '0.8rem', display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ color: isCmd ? 'var(--moss)' : 'var(--slate)', fontSize: '0.7rem', textTransform: 'uppercase', marginBottom: '0.2rem' }}>
+                          {isCmd ? 'EXECUTE' : 'READ/WRITE'}
+                        </span>
+                        <span style={{ fontFamily: 'monospace' }}>{perm.replace(/^(command|read_file|write_file)\(|\)$/g, '')}</span>
+                      </div>
+                    );
+                  }) : <span style={{ color: 'var(--text-tertiary)' }}>No global permissions granted.</span>}
+                </div>
+              </div>
+
             </div>
           ) : (
             <div style={{ color: 'var(--text-secondary)' }}>Scanning registries...</div>
           )}
+        </div>
+
+        {/* WIDGET: LIVE WORKTREES */}
+        <div className="zen-project-card" style={{ flexDirection: 'column', alignItems: 'flex-start', cursor: 'default', gridColumn: '1 / 2' }}>
+          <h3 style={{ color: 'var(--text-tertiary)', marginBottom: '1.5rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Active Git Worktrees</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%', maxHeight: '300px', overflowY: 'auto', paddingRight: '0.5rem' }}>
+            {overview.worktrees?.length > 0 ? overview.worktrees.map(wt => (
+              <div key={wt.name} style={{ background: 'var(--bg-deep)', padding: '1rem', borderRadius: 'var(--radius-md)', borderLeft: '3px solid var(--golden)' }}>
+                <div style={{ color: 'var(--text-primary)', fontWeight: '500', marginBottom: '0.2rem' }}>{wt.branch}</div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '0.5rem' }}>Repo: {wt.baseRepo.split(/[\\/]/).pop()}</div>
+                <div style={{ color: 'var(--text-tertiary)', fontSize: '0.75rem', display: 'flex', justifyContent: 'space-between' }}>
+                  <span>{new Date(wt.createdAt).toLocaleDateString()}</span>
+                  <span style={{ fontFamily: 'monospace' }}>{wt.name.split('-').pop()}</span>
+                </div>
+              </div>
+            )) : <span style={{ color: 'var(--text-tertiary)' }}>No active isolated environments.</span>}
+          </div>
+        </div>
+
+        {/* WIDGET: FILE HEATMAP */}
+        <div className="zen-project-card" style={{ flexDirection: 'column', alignItems: 'flex-start', cursor: 'default', gridColumn: '2 / -1' }}>
+          <h3 style={{ color: 'var(--text-tertiary)', marginBottom: '1.5rem', textTransform: 'uppercase', letterSpacing: '1px' }}>File Memory Heatmap</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', width: '100%' }}>
+            {overview.hotFiles?.length > 0 ? overview.hotFiles.slice(0, 10).map((file, idx) => {
+              const maxCount = overview.hotFiles[0].count;
+              const heatPct = (file.count / maxCount) * 100;
+              const isClaude = file.agent?.toLowerCase() === 'claude';
+              return (
+                <div key={file.path} style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <div style={{ width: '20px', color: 'var(--text-tertiary)', fontSize: '0.8rem', textAlign: 'right' }}>#{idx + 1}</div>
+                  <div style={{ flex: 1, position: 'relative', background: 'var(--bg-deep)', height: '28px', borderRadius: '4px', overflow: 'hidden', display: 'flex', alignItems: 'center' }}>
+                    <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${heatPct}%`, background: isClaude ? 'rgba(196, 168, 130, 0.2)' : 'rgba(138, 154, 164, 0.2)', transition: 'width 1s ease-out' }}></div>
+                    <span style={{ position: 'relative', zIndex: 1, paddingLeft: '0.8rem', color: 'var(--text-primary)', fontSize: '0.85rem', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                      {file.path.split(/[\\/]/).pop()}
+                    </span>
+                  </div>
+                  <div style={{ width: '40px', color: isClaude ? 'var(--golden)' : 'var(--slate)', fontSize: '0.85rem', fontWeight: 'bold', textAlign: 'right' }}>
+                    {file.count}x
+                  </div>
+                </div>
+              );
+            }) : <span style={{ color: 'var(--text-tertiary)' }}>No file memory compiled yet.</span>}
+          </div>
         </div>
 
         {/* WIDGET: RECENT SESSIONS */}

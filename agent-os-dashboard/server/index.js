@@ -729,7 +729,8 @@ app.get('/api/system/capabilities', async (req, res) => {
             },
             antigravity: {
                 maxContextTokens: 2000000,
-                plugins: []
+                plugins: [],
+                permissions: []
             }
         };
 
@@ -749,17 +750,26 @@ app.get('/api/system/capabilities', async (req, res) => {
             console.error('Failed to parse Claude MCP config:', e.message);
         }
 
-        // 2. Read Antigravity Plugins/Skills
-        const geminiPluginsPath = path.join(os.homedir(), '.gemini', 'config', 'plugins');
+        // 2. Read Antigravity Plugins/Skills & Permissions
+        const geminiConfigDir = path.join(os.homedir(), '.gemini', 'config');
         try {
-            if (fs.existsSync(geminiPluginsPath)) {
-                const dirs = fs.readdirSync(geminiPluginsPath, { withFileTypes: true });
+            const pluginsPath = path.join(geminiConfigDir, 'plugins');
+            if (fs.existsSync(pluginsPath)) {
+                const dirs = fs.readdirSync(pluginsPath, { withFileTypes: true });
                 capabilities.antigravity.plugins = dirs
                     .filter(dirent => dirent.isDirectory())
                     .map(dirent => dirent.name);
             }
+
+            const configPath = path.join(geminiConfigDir, 'config.json');
+            if (fs.existsSync(configPath)) {
+                const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+                if (configData?.userSettings?.globalPermissionGrants?.allow) {
+                    capabilities.antigravity.permissions = configData.userSettings.globalPermissionGrants.allow;
+                }
+            }
         } catch (e) {
-            console.error('Failed to parse Antigravity plugins:', e.message);
+            console.error('Failed to parse Antigravity config:', e.message);
         }
 
         res.json(capabilities);
