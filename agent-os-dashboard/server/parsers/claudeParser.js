@@ -7,9 +7,11 @@ const crypto = require('crypto');
 // Source dirs are derived from the user's home — never hardcoded.
 // Override with MEMORAY_CLAUDE_DIRS (semicolon-separated) for non-standard
 // installs or testing against fixture directories.
+const userHome = os.homedir();
 const DEFAULT_CLAUDE_BASE_DIRS = [
-    path.join(os.homedir(), 'AppData', 'Roaming', 'Claude', 'local-agent-mode-sessions'),
-    path.join(os.homedir(), 'AppData', 'Roaming', 'Claude', 'claude-code-sessions')
+    path.join(userHome, 'AppData', 'Roaming', 'Claude', 'local-agent-mode-sessions'),
+    path.join(userHome, 'AppData', 'Roaming', 'Claude', 'claude-code-sessions'),
+    path.join(userHome, '.claude', 'projects')
 ];
 const CLAUDE_BASE_DIRS = process.env.MEMORAY_CLAUDE_DIRS
     ? process.env.MEMORAY_CLAUDE_DIRS.split(';').map(p => p.trim()).filter(Boolean)
@@ -198,10 +200,15 @@ function findAuditFiles(dir, filesList = []) {
         for (const file of files) {
             const fullPath = path.join(dir, file);
             try {
-                if (fs.statSync(fullPath).isDirectory()) {
+                const stat = fs.statSync(fullPath);
+                if (stat.isDirectory()) {
                     findAuditFiles(fullPath, filesList);
-                } else if (file === 'audit.jsonl') {
-                    filesList.push(fullPath);
+                } else {
+                    const isAudit = file === 'audit.jsonl';
+                    const isCliLog = file.endsWith('.jsonl') && fullPath.toLowerCase().includes('.claude' + path.sep + 'projects');
+                    if (isAudit || isCliLog) {
+                        filesList.push(fullPath);
+                    }
                 }
             } catch { /* permission error, skip */ }
         }
@@ -222,14 +229,20 @@ async function syncClaude() {
             try { stats = fs.statSync(file); } catch { continue; }
             if (stats.mtimeMs <= (index.claude_last_sync_timestamp || 0)) continue;
 
-            const projectName = path.basename(path.dirname(path.dirname(file)));
-            console.log(`[Claude Sync] Parsing: ${path.basename(path.dirname(file))} (Project: ${projectName})`);
+            let projectName = path.basename(path.dirname(path.dirname(file)));
+            if (file.toLowerCase().includes('.claude' + path.sep + 'projects')) {
+                projectName = path.basename(path.dirname(file))
+                    .replace(/^([a-zA-Z])--/, '$1:\\')
+                    .replace(/--/g, ' \\ ')
+                    .replace(/-/g, '\\');
+            }
+            console.log(`[Claude Sync] Parsing: ${path.basename(file)} (Project: ${projectName})`);
 
             const sessionUUID = hash(file);
-            const title = extractSessionTitle(file) || `Session ${path.basename(path.dirname(file))}`;
+            const title = extractSessionTitle(file) || `Session ${path.basename(file, '.jsonl')}`;
 
             let taskType = 'Chat';
-            if (file.includes('claude-code-sessions')) taskType = 'Code';
+            if (file.includes('claude-code-sessions') || file.toLowerCase().includes('.claude' + path.sep + 'projects')) taskType = 'Code';
             else if (file.includes('local-agent-mode-sessions')) taskType = 'Co-work';
 
             // Initialize Session so blocks can attach to it
