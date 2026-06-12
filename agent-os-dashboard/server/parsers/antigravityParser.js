@@ -1,9 +1,13 @@
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const readline = require('readline');
 const crypto = require('crypto');
 
-const ANTIGRAVITY_BASE_DIR = 'C:\\Users\\nsdha\\.gemini\\antigravity\\brain';
+// Derived from the user's home — never hardcoded. Override with
+// MEMORAY_ANTIGRAVITY_DIR for non-standard installs or fixtures.
+const ANTIGRAVITY_BASE_DIR = process.env.MEMORAY_ANTIGRAVITY_DIR
+    || path.join(os.homedir(), '.gemini', 'antigravity', 'brain');
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const ENTITIES_DIR = path.join(DATA_DIR, 'entities');
 const INDEX_FILE = path.join(DATA_DIR, 'index.json');

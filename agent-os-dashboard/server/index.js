@@ -2,18 +2,43 @@ const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
+const { execFile } = require('child_process');
 const { syncClaude } = require('./parsers/claudeParser');
 const { syncAntigravity } = require('./parsers/antigravityParser');
+const store = require('./lib/entity_store');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors({ origin: '*' }));
+// CORS: localhost origins only. This server exposes the operator's agent
+// memory AND an OS file-open endpoint — a wildcard origin would let any
+// website the operator visits read their lineage and trigger file opens
+// (classic drive-by against localhost services). Same-machine UIs (the Vite
+// client, prime-silo's site dashboard) are all localhost, so nothing else
+// needs in.
+const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
+app.use(cors({
+    origin(origin, callback) {
+        if (!origin) return callback(null, true); // same-origin / curl
+        try {
+            const { hostname } = new URL(origin);
+            return callback(null, LOCAL_HOSTNAMES.has(hostname));
+        } catch {
+            return callback(null, false);
+        }
+    }
+}));
 app.use(express.json());
+app.use((err, req, res, next) => {
+    if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+        console.error('[Server] JSON Parsing Error:', err.message);
+        return res.status(400).json({ error: 'Invalid JSON payload' });
+    }
+    next();
+});
 
-const DATA_DIR = path.join(__dirname, 'data');
-const ENTITIES_DIR = path.join(DATA_DIR, 'entities');
-const INDEX_FILE = path.join(DATA_DIR, 'index.json');
+const ENTITIES_DIR = store.ENTITIES_DIR;
+const DATA_DIR = store.DATA_DIR;
 
 // Ensure dirs
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -24,6 +49,7 @@ async function performSync() {
     try {
         await syncClaude();
         await syncAntigravity();
+        store.invalidate();
         console.log('[Server] Delta sync completed successfully.');
     } catch (e) {
         console.error('[Server] Delta sync failed:', e);
@@ -38,14 +64,10 @@ app.get('/api/sync', async (req, res) => {
 });
 
 app.get('/api/sessions', (req, res) => {
-    if (!fs.existsSync(INDEX_FILE)) return res.json([]);
-    const index = JSON.parse(fs.readFileSync(INDEX_FILE, 'utf-8'));
-
-    const sessions = index.sessions.map(id => {
-        const file = path.join(ENTITIES_DIR, `${id}.json`);
-        if (fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, 'utf-8'));
-        return null;
-    }).filter(Boolean);
+    const { entities, index } = store.load();
+    const sessions = (index.sessions || [])
+        .map(id => entities.get(id))
+        .filter(Boolean);
 
     // Sort newest first
     sessions.sort((a, b) => b.timestamp - a.timestamp);
@@ -54,46 +76,28 @@ app.get('/api/sessions', (req, res) => {
 
 // Overview Manifest — summary stats for the ecosystem dashboard
 app.get('/api/ecosystem/manifest', (req, res) => {
-    if (!fs.existsSync(INDEX_FILE)) {
-        return res.json({
-            claude: { sessions: 0, models: [], nodeCount: 0, tokens: 0, projects: {} },
-            antigravity: { sessions: 0, models: [], nodeCount: 0, tokens: 0, projects: {} },
-            nodeTypes: { 'User Input': 0, 'Thought': 0, 'Message': 0, 'Tool Call': 0, 'Tool Result': 0, 'Artifact': 0 },
-            totalNodes: 0,
-            lastSync: null
-        });
-    }
-    const index = JSON.parse(fs.readFileSync(INDEX_FILE, 'utf-8'));
+    const { entities, index } = store.load();
 
     let claudeStats = { sessions: 0, models: new Set(), nodeCount: 0, tokens: 0, projects: {} };
     let antiStats = { sessions: 0, models: new Set(), nodeCount: 0, tokens: 0, projects: {} };
     let nodeTypes = { 'User Input': 0, 'Thought': 0, 'Message': 0, 'Tool Call': 0, 'Tool Result': 0, 'Artifact': 0 };
-    let totalNodes = 0;
 
-    if (fs.existsSync(ENTITIES_DIR)) {
-        const files = fs.readdirSync(ENTITIES_DIR).filter(f => f.endsWith('.json'));
-        totalNodes = files.length;
-        
-        // Scan all entities to build nodeType distributions
-        for (const file of files) {
-            const e = JSON.parse(fs.readFileSync(path.join(ENTITIES_DIR, file), 'utf-8'));
-            if (e.type !== 'Session') {
-                nodeTypes[e.type] = (nodeTypes[e.type] || 0) + 1;
-            }
+    for (const e of entities.values()) {
+        if (e.type !== 'Session') {
+            nodeTypes[e.type] = (nodeTypes[e.type] || 0) + 1;
         }
     }
 
-    index.sessions.forEach(id => {
-        const file = path.join(ENTITIES_DIR, `${id}.json`);
-        if (!fs.existsSync(file)) return;
-        const session = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    (index.sessions || []).forEach(id => {
+        const session = entities.get(id);
+        if (!session) return;
         const childCount = (session.children_ids || []).length;
-        
+
         const target = session.agent === 'Claude' ? claudeStats : antiStats;
         target.sessions++;
         target.nodeCount += childCount;
         target.tokens += (session.metadata?.tokens || 0);
-        
+
         const proj = session.metadata?.project || 'Unknown';
         if (!target.projects[proj]) {
             target.projects[proj] = { count: 0, sessions: [] };
@@ -115,25 +119,14 @@ app.get('/api/ecosystem/manifest', (req, res) => {
         claude: { ...claudeStats, models: Array.from(claudeStats.models) },
         antigravity: { ...antiStats, models: Array.from(antiStats.models) },
         nodeTypes,
-        totalNodes,
-        lastSync: index.claude_last_sync_timestamp || index.antigravity_last_sync_timestamp
+        totalNodes: entities.size,
+        lastSync: index.claude_last_sync_timestamp || index.antigravity_last_sync_timestamp || null
     });
 });
 
 // Get unique files touched across all sessions and their read/write timelines
 app.get('/api/files', (req, res) => {
-    if (!fs.existsSync(ENTITIES_DIR)) return res.json([]);
-    const files = fs.readdirSync(ENTITIES_DIR).filter(f => f.endsWith('.json'));
-    
-    // Load all entities in memory
-    const entitiesMap = new Map();
-    for (const file of files) {
-        try {
-            const content = fs.readFileSync(path.join(ENTITIES_DIR, file), 'utf-8');
-            const entity = JSON.parse(content);
-            entitiesMap.set(entity.id, entity);
-        } catch { /* skip corrupted files */ }
-    }
+    const { entities } = store.load();
 
     // Helper to traverse parent chain in-memory
     function findSessionRoot(entityId) {
@@ -142,7 +135,7 @@ app.get('/api/files', (req, res) => {
         while (currentId) {
             if (visited.has(currentId)) break;
             visited.add(currentId);
-            const entity = entitiesMap.get(currentId);
+            const entity = entities.get(currentId);
             if (!entity) break;
             if (entity.type === 'Session') return entity;
             currentId = entity.parent_id;
@@ -153,11 +146,11 @@ app.get('/api/files', (req, res) => {
     const fileMap = new Map();
     const writeTools = ['Write', 'Edit', 'write_to_file', 'replace_file_content', 'str_replace_editor', 'edit_file', 'write_file', 'edit_file_multi', 'patch_file', 'save_file'];
 
-    for (const [id, e] of entitiesMap.entries()) {
+    for (const e of entities.values()) {
         if (e.metadata?.filePath) {
             const pathKey = e.metadata.filePath.toLowerCase();
             const sessionRoot = findSessionRoot(e.parent_id || e.id);
-            
+
             const interaction = {
                 nodeId: e.id,
                 sessionId: sessionRoot ? sessionRoot.id : 'unknown',
@@ -182,7 +175,7 @@ app.get('/api/files', (req, res) => {
 
             const fileObj = fileMap.get(pathKey);
             fileObj.interactions.push(interaction);
-            
+
             if (e.timestamp > fileObj.lastModified) {
                 fileObj.lastModified = e.timestamp;
                 fileObj.agent = e.agent || 'Unknown';
@@ -200,27 +193,47 @@ app.get('/api/files', (req, res) => {
     res.json(result);
 });
 
-// Open file locally via OS default application
+// Open a file locally via the OS default application.
+//
+// Hardened: only paths that appear in the indexed lineage may be opened —
+// an arbitrary path from a request body is refused (403). The handler also
+// uses execFile (argument vector, no shell) so quotes/metacharacters in a
+// path can never become command injection.
+function osOpenFile(filePath) {
+    if (process.platform === 'win32') {
+        const winPath = filePath.replace(/\//g, '\\');
+        execFile('explorer.exe', [winPath], () => { /* explorer exit codes are unreliable */ });
+    } else if (process.platform === 'darwin') {
+        execFile('open', [filePath], () => {});
+    } else {
+        execFile('xdg-open', [filePath], () => {});
+    }
+}
+
 app.post('/api/files/open', (req, res) => {
-    const { filePath } = req.body;
-    if (!filePath || !fs.existsSync(filePath)) {
+    const { filePath } = req.body || {};
+    if (typeof filePath !== 'string' || !filePath.trim()) {
+        return res.status(400).json({ error: 'filePath is required.' });
+    }
+
+    const normalized = path.normalize(filePath).toLowerCase();
+    if (!store.knownFilePaths().has(normalized)) {
+        return res.status(403).json({ error: 'Path is not part of the indexed lineage.' });
+    }
+    if (!fs.existsSync(filePath)) {
         return res.status(404).json({ error: 'File not found locally' });
     }
-    const { exec } = require('child_process');
-    exec(`start "" "${filePath}"`, (err) => {
-        if (err) {
-            console.error('[Server] Failed to open file:', err);
-            return res.status(500).json({ error: err.message });
-        }
-        res.json({ status: 'ok' });
-    });
+
+    osOpenFile(filePath);
+    res.json({ status: 'ok' });
 });
 
 // Single entity lookup
 app.get('/api/entities/:id', (req, res) => {
-    const file = path.join(ENTITIES_DIR, `${req.params.id}.json`);
-    if (fs.existsSync(file)) {
-        res.json(JSON.parse(fs.readFileSync(file, 'utf-8')));
+    const { entities } = store.load();
+    const entity = entities.get(req.params.id);
+    if (entity) {
+        res.json(entity);
     } else {
         res.status(404).json({ error: 'Entity not found' });
     }
@@ -230,34 +243,33 @@ app.get('/api/entities/:id', (req, res) => {
 app.get('/api/graph/:id', (req, res) => {
     const rootId = req.params.id;
     const maxNodes = parseInt(req.query.limit) || 500;
+    const { entities } = store.load();
     const nodes = [];
     const links = [];
     const visited = new Set();
 
     // 1. Gather all session-related entities
     const rawEntities = [];
-    function traverse(nodeId, depth) {
+    function traverse(nodeId) {
         if (visited.has(nodeId) || rawEntities.length >= maxNodes) return;
         visited.add(nodeId);
 
-        const file = path.join(ENTITIES_DIR, `${nodeId}.json`);
-        if (!fs.existsSync(file)) return;
-
-        const entity = JSON.parse(fs.readFileSync(file, 'utf-8'));
+        const entity = entities.get(nodeId);
+        if (!entity) return;
         rawEntities.push(entity);
 
         if (entity.children_ids) {
             for (const childId of entity.children_ids) {
-                traverse(childId, depth + 1);
+                traverse(childId);
             }
         }
     }
 
-    traverse(rootId, 0);
+    traverse(rootId);
 
     // 2. Map of existing real Artifact nodes to avoid duplicates
     const fileRepresentations = new Map(); // pathKey -> nodeId
-    
+
     // Add all raw entities to nodes, registering real Artifact file paths
     for (const entity of rawEntities) {
         const truncContent = (entity.content || '').substring(0, 300);
@@ -366,6 +378,6 @@ function deriveLabel(entity) {
 // ─── START ───────────────────────────────────────────────
 
 app.listen(PORT, async () => {
-    console.log(`[Server] Agent OS Dashboard running on http://localhost:${PORT}`);
+    console.log(`[Server] Memo-Ray running on http://localhost:${PORT}`);
     await performSync();
 });

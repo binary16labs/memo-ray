@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import OrganicGraph from './OrganicGraph';
 import EcosystemDashboard from './EcosystemDashboard';
 
-const API = 'http://localhost:3001/api';
+const API = `${import.meta.env.VITE_MEMORAY_API || 'http://localhost:3001'}/api`;
 
 export default function UnifiedDashboard() {
   const [sessions, setSessions] = useState([]);

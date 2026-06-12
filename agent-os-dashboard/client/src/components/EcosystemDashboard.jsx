@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 
-const API = 'http://localhost:3001/api';
+const API = `${import.meta.env.VITE_MEMORAY_API || 'http://localhost:3001'}/api`;
 
 export default function EcosystemDashboard({ onSelectSession }) {
     const [manifest, setManifest] = useState(null);

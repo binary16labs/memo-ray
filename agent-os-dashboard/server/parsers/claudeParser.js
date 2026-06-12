@@ -1,12 +1,19 @@
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const readline = require('readline');
 const crypto = require('crypto');
 
-const CLAUDE_BASE_DIRS = [
-    'C:\\Users\\nsdha\\AppData\\Roaming\\Claude\\local-agent-mode-sessions',
-    'C:\\Users\\nsdha\\AppData\\Roaming\\Claude\\claude-code-sessions'
+// Source dirs are derived from the user's home — never hardcoded.
+// Override with MEMORAY_CLAUDE_DIRS (semicolon-separated) for non-standard
+// installs or testing against fixture directories.
+const DEFAULT_CLAUDE_BASE_DIRS = [
+    path.join(os.homedir(), 'AppData', 'Roaming', 'Claude', 'local-agent-mode-sessions'),
+    path.join(os.homedir(), 'AppData', 'Roaming', 'Claude', 'claude-code-sessions')
 ];
+const CLAUDE_BASE_DIRS = process.env.MEMORAY_CLAUDE_DIRS
+    ? process.env.MEMORAY_CLAUDE_DIRS.split(';').map(p => p.trim()).filter(Boolean)
+    : DEFAULT_CLAUDE_BASE_DIRS;
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const ENTITIES_DIR = path.join(DATA_DIR, 'entities');
 const INDEX_FILE = path.join(DATA_DIR, 'index.json');

@@ -40,5 +40,20 @@ The Agent OS Dashboard is a local web application designed to act as a mission c
 - **Visualization**: D3.js / React Force Graph 2D
 - **Styling**: Vanilla CSS (organic SVGs, fluid animations, muted earthy palettes).
 
-## 6. Document Status
-**FINAL** - Approved for V2 Implementation.
+## 6. Cognitive Mesh Positioning (Prime-Silo)
+
+Memo-Ray is the **memory graph** of the Binary 16 cognitive mesh — the third first-class graph beside Prime-Silo's knowledge graph (documents) and code graph (Tree-Sitter AST). The shared principle across all three: **the operator must never be the glue or the institutional memory**. Where Prime-Silo makes *runs* auditable (lineage timeline, reasoning trace, frame inspector), Memo-Ray makes *agent conversations* auditable with the same lineage discipline.
+
+### 6.1 Ontology alignment
+The entity schema (`Session → Thought → Tool Call → Artifact`) deliberately mirrors Prime-Silo's run-lineage events so a future unification needs mapping, not re-modelling.
+
+### 6.2 Enrichment seam
+Memo-Ray's file-interaction timeline records which sessions read/wrote which files — the same files Prime-Silo's code graph models as `File` nodes. A `CORRELATES_WITH` enrichment overlay (the same mechanism Prime-Silo uses to link knowledge↔code) can link memory↔code: *"show me every conversation that shaped this module."*
+
+### 6.3 Operational integration (shipped)
+- Localhost-only CORS so Prime-Silo's site dashboard (also localhost) can read the manifest endpoint while remote origins cannot.
+- Prime-Silo's demo-site dashboard carries a Memo-Ray health card (`/api/ecosystem/manifest` on `:3001`).
+- All source-log paths derive from the user's home directory with env overrides — no machine-specific paths in code (Prime-Silo SR-1 discipline).
+
+## 7. Document Status
+**FINAL** - Approved for V2 Implementation. §6 added for Prime-Silo integration.
