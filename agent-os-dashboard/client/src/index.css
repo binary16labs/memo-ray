@@ -203,6 +203,30 @@ h1, h2, h3, h4, p { font-weight: 400; }
   border-radius: 4px;
 }
 
+.session-path-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.s-cwd, .s-branch {
+  font-size: 0.68rem;
+  color: var(--text-tertiary);
+  background: var(--bg-surface);
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+.s-branch {
+  background: rgba(30, 160, 255, 0.1);
+  color: rgba(100, 190, 255, 0.9);
+}
+
 /* ─── MAIN CANVAS ────────────────────────────────────── */
 .graph-canvas {
   flex: 1;

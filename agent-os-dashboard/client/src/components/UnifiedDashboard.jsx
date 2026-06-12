@@ -244,6 +244,12 @@ export default function UnifiedDashboard() {
                         <span className="s-task-badge">{s.metadata.taskType}</span>
                       )}
                     </div>
+                    {(s.metadata?.cwd || s.metadata?.gitBranch) && (
+                      <div className="session-path-info">
+                        {s.metadata?.cwd && <span className="s-cwd" title={s.metadata.cwd}>📂 {s.metadata.cwd.split('\\').pop()?.split('/').pop()}</span>}
+                        {s.metadata?.gitBranch && <span className="s-branch">🌿 {s.metadata.gitBranch}</span>}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

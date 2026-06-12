@@ -86,6 +86,8 @@ async function parseAuditFile(filePath, sessionUUID) {
     let nodesProcessed = 0;
     let tokens = 0;
     let lineIndex = 0;
+    let sessionCwd = null;
+    let gitBranch = null;
 
     for await (const line of rl) {
         if (!line.trim()) continue;
@@ -93,6 +95,9 @@ async function parseAuditFile(filePath, sessionUUID) {
         try {
             const entry = JSON.parse(line);
             
+            if (entry.cwd && !sessionCwd) sessionCwd = entry.cwd;
+            if (entry.gitBranch && !gitBranch) gitBranch = entry.gitBranch;
+
             if (entry.message?.usage) {
                 tokens += (entry.message.usage.input_tokens || 0) + (entry.message.usage.output_tokens || 0);
             } else if (entry.usage) {
@@ -190,7 +195,7 @@ async function parseAuditFile(filePath, sessionUUID) {
             // Skip system, rate_limit_event, and other noise
         } catch { /* skip malformed lines */ }
     }
-    return { nodesProcessed, tokens };
+    return { nodesProcessed, tokens, cwd: sessionCwd, gitBranch };
 }
 
 function findAuditFiles(dir, filesList = []) {
@@ -261,9 +266,11 @@ async function syncClaude() {
             // Parse blocks (this updates children_ids of the Session)
             const result = await parseAuditFile(file, sessionUUID);
             
-            // Re-save session with extracted tokens
+            // Re-save session with extracted metadata
             const updatedSession = JSON.parse(fs.readFileSync(path.join(ENTITIES_DIR, `${sessionUUID}.json`), 'utf-8'));
             updatedSession.metadata.tokens = result.tokens;
+            if (result.cwd) updatedSession.metadata.cwd = result.cwd;
+            if (result.gitBranch) updatedSession.metadata.gitBranch = result.gitBranch;
             saveEntity(updatedSession);
 
             totalNodes += result.nodesProcessed;
