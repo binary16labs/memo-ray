@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const { execFile } = require('child_process');
 const { syncClaude } = require('./parsers/claudeParser');
 const { syncAntigravity } = require('./parsers/antigravityParser');
@@ -374,6 +375,299 @@ function deriveLabel(entity) {
     }
     return entity.type;
 }
+
+// ─── BETA API: Mission Control ──────────────────────────
+
+// Aggregated project-level overview with worktree status
+app.get('/api/beta/overview', (req, res) => {
+    const { entities, index } = store.load();
+
+    const projects = {};
+    const agentSummary = { claude: { sessions: 0, nodes: 0, tokens: 0, files: 0 }, antigravity: { sessions: 0, nodes: 0, tokens: 0, files: 0 } };
+    const fileEditCounts = new Map(); // pathKey -> { fileName, filePath, agent, count, lastTimestamp, lastTool, sessions: Set }
+
+    // Build session and file data
+    for (const e of entities.values()) {
+        if (e.metadata?.filePath) {
+            const pathKey = e.metadata.filePath.toLowerCase();
+            if (!fileEditCounts.has(pathKey)) {
+                fileEditCounts.set(pathKey, {
+                    fileName: e.metadata.fileName || path.basename(e.metadata.filePath.replace(/\\/g, '/')),
+                    filePath: e.metadata.filePath,
+                    agent: e.agent || 'Unknown',
+                    count: 0,
+                    lastTimestamp: 0,
+                    lastTool: '',
+                    sessions: new Set()
+                });
+            }
+            const fObj = fileEditCounts.get(pathKey);
+            fObj.count++;
+            if (e.timestamp > fObj.lastTimestamp) {
+                fObj.lastTimestamp = e.timestamp;
+                fObj.agent = e.agent || 'Unknown';
+                fObj.lastTool = e.metadata.toolName || e.type;
+            }
+        }
+    }
+
+    (index.sessions || []).forEach(id => {
+        const session = entities.get(id);
+        if (!session) return;
+        const agentKey = (session.agent || '').toLowerCase();
+        const childCount = (session.children_ids || []).length;
+        const proj = session.metadata?.project || 'Unknown';
+        const tokens = session.metadata?.tokens || 0;
+
+        // Agent summary
+        if (agentSummary[agentKey]) {
+            agentSummary[agentKey].sessions++;
+            agentSummary[agentKey].nodes += childCount;
+            agentSummary[agentKey].tokens += tokens;
+        }
+
+        // Project grouping
+        if (!projects[proj]) {
+            projects[proj] = { name: proj, agents: {}, totalSessions: 0, totalNodes: 0, totalTokens: 0, lastActivity: 0, files: new Set() };
+        }
+        const p = projects[proj];
+        p.totalSessions++;
+        p.totalNodes += childCount;
+        p.totalTokens += tokens;
+        if (session.timestamp > p.lastActivity) p.lastActivity = session.timestamp;
+
+        if (!p.agents[agentKey]) {
+            p.agents[agentKey] = { sessions: [] };
+        }
+        p.agents[agentKey].sessions.push({
+            id: session.id,
+            title: session.content || 'Untitled',
+            timestamp: session.timestamp,
+            nodes: childCount,
+            tokens: tokens,
+            taskType: session.metadata?.taskType || 'Chat',
+            cwd: session.metadata?.cwd || null,
+            gitBranch: session.metadata?.gitBranch || null
+        });
+
+        // Count files per project (scan children)
+        for (const childId of (session.children_ids || [])) {
+            const child = entities.get(childId);
+            if (child?.metadata?.filePath) {
+                p.files.add(child.metadata.filePath.toLowerCase());
+            }
+        }
+    });
+
+    // Serialize project data (Sets -> counts)
+    const projectList = Object.values(projects).map(p => ({
+        ...p,
+        fileCount: p.files.size,
+        files: undefined, // drop the Set
+        agents: Object.fromEntries(
+            Object.entries(p.agents).map(([k, v]) => [k, {
+                ...v,
+                sessions: v.sessions.sort((a, b) => b.timestamp - a.timestamp)
+            }])
+        )
+    })).sort((a, b) => b.lastActivity - a.lastActivity);
+
+    // Worktrees
+    let worktrees = [];
+    try {
+        const wtFile = path.join(os.homedir(), 'AppData', 'Roaming', 'Claude', 'git-worktrees.json');
+        if (fs.existsSync(wtFile)) {
+            const wtData = JSON.parse(fs.readFileSync(wtFile, 'utf-8'));
+            worktrees = Object.values(wtData.worktrees || {}).map(wt => ({
+                name: wt.name,
+                path: wt.path,
+                baseRepo: wt.baseRepo,
+                branch: wt.branch,
+                sourceBranch: wt.sourceBranch,
+                createdAt: wt.createdAt,
+                leasedBy: wt.leasedBy
+            })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        }
+    } catch { /* ignore */ }
+
+    // Hot files (top 15 most-touched)
+    const hotFiles = Array.from(fileEditCounts.values())
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 15)
+        .map(f => ({ ...f, sessions: undefined }));
+
+    // Count unique files per agent
+    for (const e of entities.values()) {
+        if (e.metadata?.filePath) {
+            const agentKey = (e.agent || '').toLowerCase();
+            if (agentSummary[agentKey]) {
+                // counted via a Set below
+            }
+        }
+    }
+    const claudeFiles = new Set();
+    const antiFiles = new Set();
+    for (const e of entities.values()) {
+        if (e.metadata?.filePath) {
+            const key = e.metadata.filePath.toLowerCase();
+            if (e.agent === 'Claude') claudeFiles.add(key);
+            else if (e.agent === 'Antigravity') antiFiles.add(key);
+        }
+    }
+    agentSummary.claude.files = claudeFiles.size;
+    agentSummary.antigravity.files = antiFiles.size;
+
+    res.json({
+        projects: projectList,
+        agents: agentSummary,
+        worktrees,
+        hotFiles,
+        totalSessions: (index.sessions || []).length,
+        totalNodes: entities.size,
+        totalFiles: fileEditCounts.size,
+        totalTokens: agentSummary.claude.tokens + agentSummary.antigravity.tokens,
+        lastSync: index.claude_last_sync_timestamp || index.antigravity_last_sync_timestamp || null
+    });
+});
+
+// Cross-session activity timeline
+app.get('/api/beta/timeline', (req, res) => {
+    const { entities, index } = store.load();
+    const limit = Math.min(parseInt(req.query.limit) || 200, 500);
+    const projectFilter = req.query.project || null;
+    const agentFilter = req.query.agent || null;
+    const typeFilter = req.query.type || null;
+
+    // Build session lookup for quick access
+    const sessionLookup = new Map();
+    for (const sid of (index.sessions || [])) {
+        const s = entities.get(sid);
+        if (s) sessionLookup.set(sid, s);
+    }
+
+    // Find the session root for an entity
+    function findSessionId(entityId) {
+        let currentId = entityId;
+        const visited = new Set();
+        while (currentId) {
+            if (visited.has(currentId)) break;
+            visited.add(currentId);
+            if (sessionLookup.has(currentId)) return currentId;
+            const entity = entities.get(currentId);
+            if (!entity) break;
+            currentId = entity.parent_id;
+        }
+        return null;
+    }
+
+    // Collect actionable entities (not sessions, with timestamps)
+    const actions = [];
+    for (const e of entities.values()) {
+        if (e.type === 'Session') continue;
+        if (!e.timestamp) continue;
+
+        // Agent filter
+        if (agentFilter && e.agent?.toLowerCase() !== agentFilter.toLowerCase()) continue;
+        // Type filter
+        if (typeFilter) {
+            const typeNorm = e.type.toLowerCase().replace(/\s+/g, '-');
+            if (typeNorm !== typeFilter.toLowerCase()) continue;
+        }
+
+        const sessionId = findSessionId(e.parent_id || e.id);
+        const session = sessionId ? sessionLookup.get(sessionId) : null;
+
+        // Project filter
+        if (projectFilter && session?.metadata?.project !== projectFilter) continue;
+
+        actions.push({
+            id: e.id,
+            type: e.type,
+            agent: e.agent,
+            timestamp: e.timestamp,
+            toolName: e.metadata?.toolName || null,
+            fileName: e.metadata?.fileName || null,
+            filePath: e.metadata?.filePath || null,
+            contentSnippet: (e.content || '').substring(0, 200),
+            sessionId: sessionId,
+            sessionTitle: session?.content || 'Unknown Session',
+            project: session?.metadata?.project || 'Unknown',
+            gitBranch: session?.metadata?.gitBranch || null
+        });
+    }
+
+    // Sort by timestamp descending, take limit
+    actions.sort((a, b) => b.timestamp - a.timestamp);
+    res.json(actions.slice(0, limit));
+});
+
+// Universal search
+app.get('/api/beta/search', (req, res) => {
+    const q = (req.query.q || '').toLowerCase().trim();
+    if (!q || q.length < 2) return res.json({ sessions: [], files: [], actions: [] });
+
+    const { entities, index } = store.load();
+    const results = { sessions: [], files: [], actions: [] };
+    const MAX_RESULTS = 30;
+
+    // Search sessions
+    for (const sid of (index.sessions || [])) {
+        const s = entities.get(sid);
+        if (!s) continue;
+        if ((s.content || '').toLowerCase().includes(q) ||
+            (s.metadata?.project || '').toLowerCase().includes(q) ||
+            (s.metadata?.gitBranch || '').toLowerCase().includes(q)) {
+            results.sessions.push({
+                id: s.id,
+                title: s.content || 'Untitled',
+                agent: s.agent,
+                project: s.metadata?.project || 'Unknown',
+                timestamp: s.timestamp,
+                nodes: (s.children_ids || []).length,
+                taskType: s.metadata?.taskType || 'Chat'
+            });
+            if (results.sessions.length >= MAX_RESULTS) break;
+        }
+    }
+
+    // Search files
+    const fileMatches = new Set();
+    for (const e of entities.values()) {
+        if (e.metadata?.filePath && !fileMatches.has(e.metadata.filePath.toLowerCase())) {
+            if ((e.metadata.fileName || '').toLowerCase().includes(q) ||
+                (e.metadata.filePath || '').toLowerCase().includes(q)) {
+                fileMatches.add(e.metadata.filePath.toLowerCase());
+                results.files.push({
+                    fileName: e.metadata.fileName || path.basename(e.metadata.filePath),
+                    filePath: e.metadata.filePath,
+                    agent: e.agent
+                });
+                if (results.files.length >= MAX_RESULTS) break;
+            }
+        }
+    }
+
+    // Search actions by content
+    let actionCount = 0;
+    for (const e of entities.values()) {
+        if (e.type === 'Session') continue;
+        if (actionCount >= MAX_RESULTS) break;
+        if ((e.content || '').toLowerCase().includes(q) ||
+            (e.metadata?.toolName || '').toLowerCase().includes(q)) {
+            results.actions.push({
+                id: e.id,
+                type: e.type,
+                agent: e.agent,
+                timestamp: e.timestamp,
+                toolName: e.metadata?.toolName || null,
+                contentSnippet: (e.content || '').substring(0, 150)
+            });
+            actionCount++;
+        }
+    }
+
+    res.json(results);
+});
 
 // ─── START ───────────────────────────────────────────────
 

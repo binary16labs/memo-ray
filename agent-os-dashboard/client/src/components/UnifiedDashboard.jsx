@@ -4,7 +4,7 @@ import EcosystemDashboard from './EcosystemDashboard';
 
 const API = `${import.meta.env.VITE_MEMORAY_API || 'http://localhost:3001'}/api`;
 
-export default function UnifiedDashboard() {
+export default function UnifiedDashboard({ initialSessionId, onSessionLoaded }) {
   const [sessions, setSessions] = useState([]);
   const [selectedSessionId, setSelectedSessionId] = useState(null);
   const [sessionData, setSessionData] = useState(null);
@@ -37,6 +37,14 @@ export default function UnifiedDashboard() {
       .then(data => setSessions(Array.isArray(data) ? data : []))
       .catch(err => console.error('Session fetch failed:', err));
   }, []);
+
+  // Cross-tab navigation: auto-load session from Beta
+  useEffect(() => {
+    if (initialSessionId && initialSessionId !== selectedSessionId) {
+      loadSession(initialSessionId);
+      onSessionLoaded?.();
+    }
+  }, [initialSessionId]);
 
   // Load files when switching to files view
   useEffect(() => {
