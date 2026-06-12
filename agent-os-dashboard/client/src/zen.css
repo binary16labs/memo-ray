@@ -1,0 +1,243 @@
+/* Zen Mode (Calming Step-Through Audit) Styles */
+
+.zen-dashboard {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  font-family: var(--font);
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Phase 1: Project Selection */
+.zen-project-phase {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+  overflow-y: auto;
+}
+
+.zen-title {
+  font-size: 2.5rem;
+  font-weight: 300;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+  letter-spacing: -0.02em;
+}
+
+.zen-subtitle {
+  font-size: 1.2rem;
+  color: var(--text-secondary);
+  margin-bottom: 3rem;
+  font-weight: 400;
+}
+
+.zen-project-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  width: 100%;
+  max-width: 800px;
+}
+
+.zen-project-card {
+  background: var(--bg-base);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 2rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.zen-project-card:hover {
+  background: var(--bg-surface);
+  border-color: var(--sage);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+}
+
+.zen-project-name {
+  font-size: 1.8rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.zen-project-meta {
+  font-size: 1.1rem;
+  color: var(--text-tertiary);
+  display: flex;
+  gap: 1.5rem;
+}
+
+/* Session Selection */
+.zen-session-list {
+  width: 100%;
+  max-width: 800px;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.zen-back-btn {
+  align-self: flex-start;
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  padding: 0.8rem 1.5rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 1.1rem;
+  margin-bottom: 2rem;
+  transition: all 0.2s;
+}
+.zen-back-btn:hover {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+
+.zen-session-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 1.5rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.zen-session-card:hover {
+  background: var(--bg-elevated);
+  border-color: var(--taupe);
+}
+.zen-session-title {
+  font-size: 1.4rem;
+  margin-bottom: 0.5rem;
+  color: var(--text-primary);
+}
+.zen-session-date {
+  font-size: 1rem;
+  color: var(--text-tertiary);
+}
+
+/* Phase 2: Step-Through Audit */
+.zen-step-phase {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.zen-step-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 3rem;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-base);
+}
+
+.zen-step-progress {
+  font-size: 1.2rem;
+  color: var(--text-secondary);
+  letter-spacing: 2px;
+}
+
+.zen-step-nav {
+  display: flex;
+  gap: 1rem;
+}
+
+.zen-nav-btn {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  padding: 1rem 2rem;
+  font-size: 1.2rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.zen-nav-btn:hover:not(:disabled) {
+  background: var(--bg-elevated);
+  border-color: var(--sage);
+}
+
+.zen-nav-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.zen-step-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+  overflow-y: auto;
+}
+
+.zen-action-card {
+  width: 100%;
+  max-width: 900px;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  animation: fade-in-up 0.4s ease-out forwards;
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.zen-action-hero {
+  font-size: 2.2rem;
+  line-height: 1.4;
+  font-weight: 300;
+  color: var(--text-primary);
+  text-align: center;
+}
+
+.zen-action-meta {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  font-size: 1.1rem;
+  color: var(--text-tertiary);
+}
+
+.zen-action-agent {
+  color: var(--golden);
+  font-weight: 500;
+}
+
+.zen-action-agent.antigravity {
+  color: var(--slate);
+}
+
+.zen-file-viewer {
+  background: var(--bg-base);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 2rem;
+  max-height: 50vh;
+  overflow-y: auto;
+  box-shadow: inset 0 0 20px rgba(0,0,0,0.2);
+}
+
+.zen-file-viewer pre {
+  font-family: 'Fira Code', 'Courier New', monospace;
+  font-size: 1.1rem;
+  line-height: 1.7;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}

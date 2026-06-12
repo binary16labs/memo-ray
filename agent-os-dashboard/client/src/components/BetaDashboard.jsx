@@ -1,24 +1,22 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import '../zen.css';
 
 const API = `${import.meta.env.VITE_MEMORAY_API || 'http://localhost:3001'}/api`;
 
 export default function BetaDashboard({ onNavigateToSession }) {
   const [overview, setOverview] = useState(null);
-  const [timeline, setTimeline] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
-  const [agentFilter, setAgentFilter] = useState('all');
-  const [projectFilter, setProjectFilter] = useState(null);
-  const [typeFilter, setTypeFilter] = useState(null);
-  const [expandedProjects, setExpandedProjects] = useState({});
-  const [expandedAgents, setExpandedAgents] = useState({});
-  const [selectedAction, setSelectedAction] = useState(null);
+  
+  // Phase state: 'projects' -> 'sessions' -> 'step-through'
+  const [phase, setPhase] = useState('projects');
+  
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [selectedSession, setSelectedSession] = useState(null);
+  
+  // Timeline state for step-through
+  const [timeline, setTimeline] = useState([]);
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [fullEntity, setFullEntity] = useState(null);
-
-  // Search
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState(null);
-  const [searchDebounce, setSearchDebounce] = useState(null);
 
   // Load overview
   useEffect(() => {
@@ -26,469 +24,207 @@ export default function BetaDashboard({ onNavigateToSession }) {
     fetch(`${API}/beta/overview`)
       .then(r => r.json())
       .then(data => { setOverview(data); setLoading(false); })
-      .catch(err => { console.error('Beta overview failed:', err); setLoading(false); });
+      .catch(err => { console.error('Overview failed:', err); setLoading(false); });
   }, []);
 
-  // Load timeline
+  // Load timeline when session is selected
   useEffect(() => {
-    const params = new URLSearchParams();
-    params.set('limit', '200');
-    if (projectFilter) params.set('project', projectFilter);
-    if (agentFilter !== 'all') params.set('agent', agentFilter);
-    if (typeFilter) params.set('type', typeFilter);
-
-    fetch(`${API}/beta/timeline?${params}`)
-      .then(r => r.json())
-      .then(data => setTimeline(Array.isArray(data) ? data : []))
-      .catch(err => console.error('Beta timeline failed:', err));
-  }, [projectFilter, agentFilter, typeFilter]);
-
-  // Debounced search
-  useEffect(() => {
-    if (searchDebounce) clearTimeout(searchDebounce);
-    if (!searchQuery || searchQuery.length < 2) {
-      setSearchResults(null);
-      return;
-    }
-    const timer = setTimeout(() => {
-      fetch(`${API}/beta/search?q=${encodeURIComponent(searchQuery)}`)
+    if (phase === 'step-through' && selectedSession) {
+      setLoading(true);
+      fetch(`${API}/beta/timeline?limit=500&project=${encodeURIComponent(selectedSession.project)}`)
         .then(r => r.json())
-        .then(data => setSearchResults(data))
-        .catch(() => setSearchResults(null));
-    }, 300);
-    setSearchDebounce(timer);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
+        .then(data => {
+          // Filter to just this session's actions, reverse to get chronological order (oldest first)
+          const sessionActions = (data || [])
+            .filter(a => a.sessionId === selectedSession.id)
+            .reverse();
+          setTimeline(sessionActions);
+          setCurrentStepIndex(0);
+          setLoading(false);
+        })
+        .catch(err => { console.error('Timeline failed:', err); setLoading(false); });
+    }
+  }, [phase, selectedSession]);
 
-  // Fetch full entity for audit inspector
-  const inspectAction = useCallback((action) => {
-    setSelectedAction(action);
-    setFullEntity(null);
-    fetch(`${API}/entities/${action.id}`)
-      .then(r => r.json())
-      .then(data => setFullEntity(data))
-      .catch(() => setFullEntity(null));
-  }, []);
+  // Load full entity for the current step
+  useEffect(() => {
+    if (phase === 'step-through' && timeline.length > 0) {
+      const currentAction = timeline[currentStepIndex];
+      setFullEntity(null);
+      fetch(`${API}/entities/${currentAction.id}`)
+        .then(r => r.json())
+        .then(data => setFullEntity(data))
+        .catch(() => setFullEntity(null));
+    }
+  }, [currentStepIndex, timeline, phase]);
 
-  const handleSync = async () => {
-    setSyncing(true);
-    try {
-      await fetch(`${API}/sync`);
-      const res = await fetch(`${API}/beta/overview`);
-      setOverview(await res.json());
-    } catch (e) { console.error('Sync failed:', e); }
-    setSyncing(false);
+  const handleProjectSelect = (proj) => {
+    setSelectedProject(proj);
+    setPhase('sessions');
   };
 
-  const toggleProject = (name) => {
-    setExpandedProjects(prev => ({ ...prev, [name]: !prev[name] }));
+  const handleSessionSelect = (session, projName) => {
+    setSelectedSession({ ...session, project: projName });
+    setPhase('step-through');
   };
 
-  const toggleAgent = (key) => {
-    setExpandedAgents(prev => ({ ...prev, [key]: !prev[key] }));
+  const handleNext = () => {
+    if (currentStepIndex < timeline.length - 1) {
+      setCurrentStepIndex(prev => prev + 1);
+    }
   };
 
-  const openFileInOS = (filePath) => {
-    fetch(`${API}/files/open`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filePath })
-    }).catch(err => console.error('OS open failed:', err));
+  const handlePrev = () => {
+    if (currentStepIndex > 0) {
+      setCurrentStepIndex(prev => prev - 1);
+    }
   };
 
-  const formatTime = (ts) => {
-    if (!ts) return '';
-    const d = new Date(ts);
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
-
-  const formatDate = (ts) => {
-    if (!ts) return '';
-    return new Date(ts).toLocaleDateString();
-  };
-
-  const formatTokens = (n) => {
-    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
-    if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
-    return n.toString();
-  };
-
-  const typeBadgeClass = (type) => {
-    return (type || '').toLowerCase().replace(/\s+/g, '-');
-  };
-
-  const hasSearchResults = searchResults &&
-    (searchResults.sessions?.length > 0 || searchResults.files?.length > 0 || searchResults.actions?.length > 0);
-
-  if (loading) {
+  if (loading && phase === 'projects') {
     return (
-      <div className="beta-dashboard">
-        <div className="loading-state blueprint-loading">
-          <div className="blueprint-spinner" />
-          <span>Initializing Mission Control…</span>
+      <div className="zen-dashboard">
+        <div className="zen-project-phase">
+          <div className="zen-title">Waking up agents...</div>
         </div>
       </div>
     );
   }
 
-  const maxHotFileCount = overview?.hotFiles?.[0]?.count || 1;
+  // Generate plain English explanation for actions
+  const getActionHeroText = (action) => {
+    if (!action) return '';
+    const agentName = action.agent === 'Claude' ? 'Claude' : 'Antigravity';
+    
+    if (action.type === 'Tool Call') {
+      if (action.toolName === 'replace_file_content' || action.toolName === 'write_to_file' || action.toolName === 'multi_replace_file_content') {
+        return `${agentName} edited ${action.fileName || 'a file'}.`;
+      }
+      if (action.toolName === 'run_command') {
+        return `${agentName} ran a terminal command.`;
+      }
+      if (action.toolName === 'grep_search' || action.toolName === 'search_web') {
+        return `${agentName} searched for information.`;
+      }
+      if (action.toolName === 'view_file' || action.toolName === 'list_dir') {
+        return `${agentName} reviewed ${action.fileName || 'a directory'}.`;
+      }
+      return `${agentName} used the ${action.toolName} tool.`;
+    }
+    
+    if (action.type === 'User Input') {
+      return `You provided new instructions to ${agentName}.`;
+    }
+    
+    if (action.type === 'Thought' || action.type === 'PLANNER_RESPONSE') {
+      return `${agentName} stopped to think and plan the next move.`;
+    }
+
+    if (action.type === 'Tool Result') {
+      return `${agentName} received the results of the tool execution.`;
+    }
+
+    return `${agentName} performed an action (${action.type}).`;
+  };
 
   return (
-    <div className="beta-dashboard">
-      {/* ─── COMMAND BAR ─── */}
-      <div className="beta-command-bar">
-        <div className="beta-command-left">
-          <div className="beta-search-wrapper">
-            <span className="beta-search-icon">⌕</span>
-            <input
-              type="text"
-              className="beta-search-input"
-              placeholder="Search sessions, files, tools…"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-            {searchQuery && (
-              <button className="beta-search-clear" onClick={() => { setSearchQuery(''); setSearchResults(null); }}>✕</button>
-            )}
-          </div>
-        </div>
-
-        <div className="beta-command-center">
-          <div className="beta-stat">
-            <span className="stat-value">{overview?.totalSessions || 0}</span>
-            <span className="stat-label">Sessions</span>
-          </div>
-          <div className="beta-stat">
-            <span className="stat-value">{formatTokens(overview?.totalNodes || 0)}</span>
-            <span className="stat-label">Nodes</span>
-          </div>
-          <div className="beta-stat">
-            <span className="stat-value">{formatTokens(overview?.totalTokens || 0)}</span>
-            <span className="stat-label">Tokens</span>
-          </div>
-          <div className="beta-stat">
-            <span className="stat-value">{overview?.totalFiles || 0}</span>
-            <span className="stat-label">Files</span>
-          </div>
-        </div>
-
-        <div className="beta-command-right">
-          <div className="beta-agent-filter">
-            {['all', 'claude', 'antigravity'].map(a => (
-              <button
-                key={a}
-                className={`beta-agent-chip ${agentFilter === a ? 'active' : ''}`}
-                onClick={() => setAgentFilter(a)}
-              >
-                {a === 'all' ? 'All' : a === 'claude' ? 'C' : 'A'}
-              </button>
+    <div className="zen-dashboard">
+      
+      {/* PHASE 1: Project Selection */}
+      {phase === 'projects' && (
+        <div className="zen-project-phase">
+          <h1 className="zen-title">Select a Project</h1>
+          <p className="zen-subtitle">Choose a workspace to review its agent activity.</p>
+          <div className="zen-project-list">
+            {(overview?.projects || []).map(proj => (
+              <div key={proj.name} className="zen-project-card" onClick={() => handleProjectSelect(proj)}>
+                <div className="zen-project-name">{proj.name}</div>
+                <div className="zen-project-meta">
+                  <span>{proj.totalSessions} Sessions</span>
+                  <span>{proj.fileCount} Files</span>
+                </div>
+              </div>
             ))}
           </div>
-          <button className={`beta-sync-btn ${syncing ? 'syncing' : ''}`} onClick={handleSync} disabled={syncing}>
-            ↻
-          </button>
-        </div>
-      </div>
-
-      {/* ─── SEARCH RESULTS OVERLAY ─── */}
-      {hasSearchResults && (
-        <div className="beta-search-results">
-          {searchResults.sessions?.length > 0 && (
-            <div className="beta-search-group">
-              <h4>Sessions ({searchResults.sessions.length})</h4>
-              {searchResults.sessions.map(s => (
-                <div key={s.id} className="beta-search-item" onClick={() => onNavigateToSession?.(s.id)}>
-                  <span className={`beta-tl-agent ${s.agent?.toLowerCase()}`}>{s.agent === 'Claude' ? 'C' : 'A'}</span>
-                  <div>
-                    <div className="beta-search-title">{s.title}</div>
-                    <div className="beta-search-meta">{s.project} · {s.nodes} nodes · {formatDate(s.timestamp)}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          {searchResults.files?.length > 0 && (
-            <div className="beta-search-group">
-              <h4>Files ({searchResults.files.length})</h4>
-              {searchResults.files.map((f, i) => (
-                <div key={i} className="beta-search-item" onClick={() => openFileInOS(f.filePath)}>
-                  <span className="beta-search-file-icon">📄</span>
-                  <div>
-                    <div className="beta-search-title">{f.fileName}</div>
-                    <div className="beta-search-meta">{f.filePath}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          {searchResults.actions?.length > 0 && (
-            <div className="beta-search-group">
-              <h4>Actions ({searchResults.actions.length})</h4>
-              {searchResults.actions.map(a => (
-                <div key={a.id} className="beta-search-item" onClick={() => inspectAction(a)}>
-                  <span className={`beta-tl-type-badge ${typeBadgeClass(a.type)}`}>{a.type}</span>
-                  <div>
-                    <div className="beta-search-title">{a.toolName || a.type}</div>
-                    <div className="beta-search-meta">{a.contentSnippet?.substring(0, 80)}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          <button className="beta-search-dismiss" onClick={() => { setSearchQuery(''); setSearchResults(null); }}>
-            Dismiss Results
-          </button>
         </div>
       )}
 
-      {/* ─── MAIN CONTENT ─── */}
-      <div className="beta-content">
-        {/* ─── LEFT COLUMN ─── */}
-        <div className="beta-left-col">
-          {/* Project Tree */}
-          <div className="beta-section">
-            <div className="beta-section-header">
-              <span>📊 Projects</span>
-              {projectFilter && (
-                <button className="beta-filter-clear" onClick={() => setProjectFilter(null)}>Clear filter</button>
-              )}
-            </div>
-            <div className="beta-project-tree">
-              {(overview?.projects || []).map(proj => {
-                const isExpanded = !!expandedProjects[proj.name];
-                const isFiltered = projectFilter === proj.name;
-                return (
-                  <div key={proj.name} className={`beta-project ${isExpanded ? 'expanded' : ''} ${isFiltered ? 'filtered' : ''}`}>
-                    <div className="beta-project-header" onClick={() => toggleProject(proj.name)}>
-                      <span className="beta-expand-icon">{isExpanded ? '▾' : '▸'}</span>
-                      <span className="beta-project-name">{proj.name}</span>
-                      <div className="beta-project-stats">
-                        <span>{proj.totalSessions}s</span>
-                        <span>{formatTokens(proj.totalTokens)}t</span>
-                      </div>
-                    </div>
-                    {isExpanded && (
-                      <div className="beta-project-body">
-                        <button
-                          className={`beta-project-filter-btn ${isFiltered ? 'active' : ''}`}
-                          onClick={(e) => { e.stopPropagation(); setProjectFilter(isFiltered ? null : proj.name); }}
-                        >
-                          {isFiltered ? '⊘ Remove filter' : '⊕ Filter timeline'}
-                        </button>
-                        {Object.entries(proj.agents).map(([agentKey, agentData]) => {
-                          const agentGroupKey = `${proj.name}_${agentKey}`;
-                          const isAgentExpanded = expandedAgents[agentGroupKey] !== false; // default open
-                          return (
-                            <div key={agentKey} className="beta-agent-group">
-                              <div className="beta-agent-group-header" onClick={() => toggleAgent(agentGroupKey)}>
-                                <span className={`beta-tl-agent ${agentKey}`}>
-                                  {agentKey === 'claude' ? 'C' : 'A'}
-                                </span>
-                                <span>{agentKey === 'claude' ? 'Claude' : 'Antigravity'}</span>
-                                <span className="beta-agent-session-count">{agentData.sessions.length}</span>
-                              </div>
-                              {isAgentExpanded && agentData.sessions.map(s => (
-                                <div
-                                  key={s.id}
-                                  className="beta-session-item"
-                                  onClick={() => onNavigateToSession?.(s.id)}
-                                >
-                                  <div className="beta-session-title">{s.title}</div>
-                                  <div className="beta-session-meta">
-                                    <span>{formatDate(s.timestamp)}</span>
-                                    <span>{s.nodes} nodes</span>
-                                    <span className="s-task-badge">{s.taskType}</span>
-                                  </div>
-                                  {s.gitBranch && (
-                                    <div className="beta-session-branch">🌿 {s.gitBranch}</div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Worktree Status Board */}
-          {overview?.worktrees?.length > 0 && (
-            <div className="beta-section">
-              <div className="beta-section-header">
-                <span>🌿 Worktrees</span>
-                <span className="beta-wt-count">{overview.worktrees.length}</span>
-              </div>
-              <div className="beta-worktree-grid">
-                {overview.worktrees.map(wt => (
-                  <div key={wt.name} className="beta-worktree-card">
-                    <div className="beta-wt-name">{wt.name}</div>
-                    <div className="beta-wt-branch">{wt.branch}</div>
-                    <div className="beta-wt-meta">
-                      <span className="beta-wt-repo">{wt.baseRepo?.split('\\').pop()?.split('/').pop()}</span>
-                      <span className="beta-wt-date">{formatDate(wt.createdAt)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Hot Files */}
-          <div className="beta-section">
-            <div className="beta-section-header">
-              <span>🔥 Hot Files</span>
-            </div>
-            <div className="beta-hot-files">
-              {(overview?.hotFiles || []).slice(0, 10).map((f, i) => (
-                <div key={i} className="beta-hot-file" onClick={() => openFileInOS(f.filePath)}>
-                  <div className="beta-hot-file-row">
-                    <span className="beta-hot-file-name" title={f.filePath}>{f.fileName}</span>
-                    <span className="beta-hot-file-count">{f.count}</span>
-                  </div>
-                  <div className="beta-hot-file-bar">
-                    <div
-                      className="beta-hot-file-bar-fill"
-                      style={{ width: `${Math.max(4, (f.count / maxHotFileCount) * 100)}%` }}
-                    />
-                  </div>
-                  <div className="beta-hot-file-meta">
-                    <span className={`beta-hot-file-agent ${f.agent?.toLowerCase()}`}>{f.agent}</span>
-                    <span className="beta-hot-file-tool">{f.lastTool}</span>
+      {/* PHASE 2: Session Selection */}
+      {phase === 'sessions' && selectedProject && (
+        <div className="zen-project-phase">
+          <button className="zen-back-btn" onClick={() => setPhase('projects')}>← Back to Projects</button>
+          <h1 className="zen-title">{selectedProject.name} Sessions</h1>
+          <p className="zen-subtitle">Select a specific session to step through the audit.</p>
+          
+          <div className="zen-session-list">
+            {Object.entries(selectedProject.agents).map(([agentKey, agentData]) => (
+              agentData.sessions.map(s => (
+                <div key={s.id} className="zen-session-card" onClick={() => handleSessionSelect(s, selectedProject.name)}>
+                  <div className="zen-session-title">{s.title || 'Untitled Session'}</div>
+                  <div className="zen-session-date">
+                    {new Date(s.timestamp).toLocaleString()} · {agentKey === 'claude' ? 'Claude' : 'Antigravity'} · {s.nodes} steps
                   </div>
                 </div>
-              ))}
-            </div>
+              ))
+            ))}
           </div>
         </div>
+      )}
 
-        {/* ─── RIGHT COLUMN ─── */}
-        <div className="beta-right-col">
-          {/* Activity Timeline */}
-          <div className="beta-section beta-timeline-section">
-            <div className="beta-section-header">
-              <span><span className="live-dot" /> Activity Timeline</span>
-              <span className="beta-tl-count">{timeline.length} actions</span>
+      {/* PHASE 3: Step-Through Audit */}
+      {phase === 'step-through' && (
+        <div className="zen-step-phase">
+          <div className="zen-step-header">
+            <button className="zen-back-btn" style={{ margin: 0 }} onClick={() => setPhase('sessions')}>
+              ← Exit
+            </button>
+            <div className="zen-step-progress">
+              Step {timeline.length > 0 ? currentStepIndex + 1 : 0} of {timeline.length}
             </div>
-
-            <div className="beta-timeline-filters">
-              {['all', 'tool-call', 'user-input', 'artifact', 'thought', 'tool-result'].map(t => (
-                <button
-                  key={t}
-                  className={`beta-tl-filter-btn ${(typeFilter || 'all') === (t === 'all' ? null : t) || (t === 'all' && !typeFilter) ? 'active' : ''}`}
-                  onClick={() => setTypeFilter(t === 'all' ? null : t)}
-                >
-                  {t === 'all' ? 'All' : t.replace('-', ' ')}
-                </button>
-              ))}
-            </div>
-
-            <div className="beta-timeline">
-              {timeline.length === 0 && (
-                <div className="beta-tl-empty">No actions match the current filters.</div>
-              )}
-              {timeline.map((action, idx) => (
-                <div
-                  key={action.id}
-                  className={`beta-tl-item ${selectedAction?.id === action.id ? 'selected' : ''}`}
-                  onClick={() => inspectAction(action)}
-                  style={{ animationDelay: `${Math.min(idx * 0.02, 0.5)}s` }}
-                >
-                  <div className="beta-tl-time">{formatTime(action.timestamp)}</div>
-                  <span className={`beta-tl-agent ${action.agent?.toLowerCase()}`}>
-                    {action.agent === 'Claude' ? 'C' : 'A'}
-                  </span>
-                  <div className="beta-tl-body">
-                    <div className="beta-tl-action">
-                      <span className={`beta-tl-type-badge ${typeBadgeClass(action.type)}`}>
-                        {action.type}
-                      </span>
-                      {action.toolName && <span className="beta-tl-tool-name">{action.toolName}</span>}
-                    </div>
-                    {action.fileName && (
-                      <div className="beta-tl-file" title={action.filePath}>📄 {action.fileName}</div>
-                    )}
-                    <div className="beta-tl-context">
-                      {action.project} › {action.sessionTitle?.substring(0, 40)}
-                    </div>
-                  </div>
-                </div>
-              ))}
+            <div className="zen-step-nav">
+              <button className="zen-nav-btn" onClick={handlePrev} disabled={currentStepIndex === 0 || timeline.length === 0}>
+                ← Previous
+              </button>
+              <button className="zen-nav-btn" onClick={handleNext} disabled={currentStepIndex >= timeline.length - 1 || timeline.length === 0}>
+                Next →
+              </button>
             </div>
           </div>
 
-          {/* Audit Inspector */}
-          <div className="beta-section beta-audit-section">
-            <div className="beta-section-header">
-              <span>🔍 Audit Inspector</span>
-            </div>
-            {selectedAction ? (
-              <div className="beta-audit">
-                <div className="beta-audit-header">
-                  <span className={`beta-tl-type-badge ${typeBadgeClass(selectedAction.type)}`}>
-                    {selectedAction.type}
-                  </span>
-                  <span className={`beta-tl-agent ${selectedAction.agent?.toLowerCase()}`}>
-                    {selectedAction.agent === 'Claude' ? 'C' : 'A'}
-                  </span>
-                  <span className="beta-audit-agent-name">{selectedAction.agent}</span>
-                </div>
-
-                <div className="beta-audit-fields">
-                  {selectedAction.toolName && (
-                    <div className="beta-audit-field">
-                      <span className="field-label">Tool</span>
-                      <span className="field-value">{selectedAction.toolName}</span>
-                    </div>
-                  )}
-                  {selectedAction.fileName && (
-                    <div className="beta-audit-field">
-                      <span className="field-label">File</span>
-                      <span className="field-value clickable" onClick={() => openFileInOS(selectedAction.filePath)}>
-                        {selectedAction.fileName} ↗
-                      </span>
-                    </div>
-                  )}
-                  <div className="beta-audit-field">
-                    <span className="field-label">Session</span>
-                    <span
-                      className="field-value clickable"
-                      onClick={() => onNavigateToSession?.(selectedAction.sessionId)}
-                    >
-                      {selectedAction.sessionTitle?.substring(0, 60)} →
-                    </span>
-                  </div>
-                  <div className="beta-audit-field">
-                    <span className="field-label">Project</span>
-                    <span className="field-value">{selectedAction.project}</span>
-                  </div>
-                  {selectedAction.gitBranch && (
-                    <div className="beta-audit-field">
-                      <span className="field-label">Branch</span>
-                      <span className="field-value">🌿 {selectedAction.gitBranch}</span>
-                    </div>
-                  )}
-                  <div className="beta-audit-field">
-                    <span className="field-label">Timestamp</span>
-                    <span className="field-value">{new Date(selectedAction.timestamp).toLocaleString()}</span>
-                  </div>
-                </div>
-
-                <div className="beta-audit-content">
-                  <pre>{fullEntity?.content || selectedAction.contentSnippet || '(loading…)'}</pre>
-                </div>
-              </div>
+          <div className="zen-step-content">
+            {loading ? (
+              <div className="zen-title">Loading timeline...</div>
+            ) : timeline.length === 0 ? (
+              <div className="zen-title">No actions found for this session.</div>
             ) : (
-              <div className="beta-audit-empty">
-                <p>Click any action in the timeline to inspect its full audit trail.</p>
+              <div className="zen-action-card" key={currentStepIndex}>
+                <div className="zen-action-hero">
+                  {getActionHeroText(timeline[currentStepIndex])}
+                </div>
+                
+                <div className="zen-action-meta">
+                  <span className={`zen-action-agent ${timeline[currentStepIndex].agent?.toLowerCase()}`}>
+                    {timeline[currentStepIndex].agent}
+                  </span>
+                  <span>{new Date(timeline[currentStepIndex].timestamp).toLocaleTimeString()}</span>
+                  {timeline[currentStepIndex].fileName && (
+                    <span>📄 {timeline[currentStepIndex].fileName}</span>
+                  )}
+                  {timeline[currentStepIndex].toolName && (
+                    <span>🔧 {timeline[currentStepIndex].toolName}</span>
+                  )}
+                </div>
+
+                <div className="zen-file-viewer">
+                  <pre>
+                    {fullEntity?.content || timeline[currentStepIndex].contentSnippet || '(Loading content...)'}
+                  </pre>
+                </div>
               </div>
             )}
           </div>
         </div>
-      </div>
+      )}
+
     </div>
   );
 }
