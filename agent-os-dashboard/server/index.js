@@ -226,7 +226,7 @@ app.get('/api/entities/:id', (req, res) => {
     }
 });
 
-// Recursive graph fetch with depth limit for performance
+// Recursive graph fetch with depth limit for performance and dynamic file node insertion
 app.get('/api/graph/:id', (req, res) => {
     const rootId = req.params.id;
     const maxNodes = parseInt(req.query.limit) || 500;
@@ -234,18 +234,33 @@ app.get('/api/graph/:id', (req, res) => {
     const links = [];
     const visited = new Set();
 
+    // 1. Gather all session-related entities
+    const rawEntities = [];
     function traverse(nodeId, depth) {
-        if (visited.has(nodeId) || nodes.length >= maxNodes) return;
+        if (visited.has(nodeId) || rawEntities.length >= maxNodes) return;
         visited.add(nodeId);
 
         const file = path.join(ENTITIES_DIR, `${nodeId}.json`);
         if (!fs.existsSync(file)) return;
 
         const entity = JSON.parse(fs.readFileSync(file, 'utf-8'));
+        rawEntities.push(entity);
 
-        // Truncate content for the wire — full content available via /api/entities/:id
+        if (entity.children_ids) {
+            for (const childId of entity.children_ids) {
+                traverse(childId, depth + 1);
+            }
+        }
+    }
+
+    traverse(rootId, 0);
+
+    // 2. Map of existing real Artifact nodes to avoid duplicates
+    const fileRepresentations = new Map(); // pathKey -> nodeId
+    
+    // Add all raw entities to nodes, registering real Artifact file paths
+    for (const entity of rawEntities) {
         const truncContent = (entity.content || '').substring(0, 300);
-
         nodes.push({
             id: entity.id,
             type: entity.type,
@@ -256,7 +271,8 @@ app.get('/api/graph/:id', (req, res) => {
             metadata: {
                 model: entity.metadata?.model,
                 toolName: entity.metadata?.toolName,
-                fileName: entity.metadata?.fileName
+                fileName: entity.metadata?.fileName,
+                filePath: entity.metadata?.filePath
             },
             val: entity.type === 'Session' ? 24 :
                  entity.type === 'Artifact' ? 16 :
@@ -264,18 +280,66 @@ app.get('/api/graph/:id', (req, res) => {
                  entity.type === 'Tool Call' ? 8 : 6
         });
 
+        // Register real Artifact nodes
+        if (entity.type === 'Artifact' && entity.metadata?.filePath) {
+            fileRepresentations.set(entity.metadata.filePath.toLowerCase(), entity.id);
+        }
+
+        // Add standard parent-child layout links
         if (entity.parent_id && visited.has(entity.parent_id)) {
             links.push({ source: entity.parent_id, target: entity.id });
         }
+    }
 
-        if (entity.children_ids) {
-            for (const childId of entity.children_ids) {
-                traverse(childId, depth + 1);
+    // 3. Scan tool calls for file interactions and dynamically append virtual file nodes
+    const crypto = require('crypto');
+    const linkKeys = new Set(links.map(l => `${l.source}_${l.target}`));
+
+    for (const entity of rawEntities) {
+        if (entity.metadata?.filePath && entity.type !== 'Artifact') {
+            const filePath = entity.metadata.filePath;
+            const fileName = entity.metadata.fileName || path.basename(filePath.replace(/\\/g, '/'));
+            const pathKey = filePath.toLowerCase();
+
+            let targetNodeId;
+
+            // If a real Artifact exists, connect directly to it. Otherwise, construct a virtual file node.
+            if (fileRepresentations.has(pathKey)) {
+                targetNodeId = fileRepresentations.get(pathKey);
+            } else {
+                // Generate a deterministic virtual node ID for this file in this session
+                const virtualId = crypto.createHash('md5').update(rootId + '_virtual_' + pathKey).digest('hex');
+                targetNodeId = virtualId;
+
+                // Create the virtual file node if not already created
+                if (!nodes.some(n => n.id === virtualId)) {
+                    nodes.push({
+                        id: virtualId,
+                        type: 'Artifact', // visually render as an Artifact/File (rectangular style)
+                        agent: entity.agent,
+                        timestamp: entity.timestamp,
+                        content: `Virtual file reference to ${filePath}`,
+                        label: fileName,
+                        metadata: {
+                            fileName,
+                            filePath,
+                            isVirtual: true
+                        },
+                        val: 16
+                    });
+                    fileRepresentations.set(pathKey, virtualId);
+                }
+            }
+
+            // Link the Tool Call to the representative file node
+            const linkKey = `${entity.id}_${targetNodeId}`;
+            if (!linkKeys.has(linkKey) && entity.id !== targetNodeId) {
+                links.push({ source: entity.id, target: targetNodeId });
+                linkKeys.add(linkKey);
             }
         }
     }
 
-    traverse(rootId, 0);
     res.json({ nodes, links });
 });
 
