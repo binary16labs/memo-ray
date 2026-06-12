@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import OrganicGraph from './OrganicGraph';
-import EcosystemDashboard from './EcosystemDashboard';
+import OverviewGrid from './OverviewGrid';
 
 const API = `${import.meta.env.VITE_MEMORAY_API || 'http://localhost:3001'}/api`;
 
@@ -190,14 +190,14 @@ export default function UnifiedDashboard({ initialSessionId, onSessionLoaded }) 
   return (
     <div className="unified-app">
       {/* ─── LEFT SIDEBAR ─── */}
-      <aside className="left-sidebar">
-        <div className="sidebar-header">
-          <div className="sidebar-logo">M</div>
-          <h2 onClick={goHome}>Memo-Ray</h2>
+      <aside className="left-sidebar" style={{ background: 'var(--bg-base)', borderRight: '1px solid var(--border-subtle)', padding: '1rem', display: 'flex', flexDirection: 'column' }}>
+        <div className="sidebar-header" style={{ marginBottom: '2rem' }}>
+          <div className="sidebar-logo" style={{ color: 'var(--sage)' }}>M</div>
+          <h2 onClick={goHome} style={{ cursor: 'pointer', color: 'var(--text-primary)', fontSize: '1.4rem', fontWeight: 500 }}>Memo-Ray</h2>
         </div>
 
         {/* View Toggle tabs: Sessions Explorer vs Files Explorer */}
-        <div className="view-toggle-tabs">
+        <div className="view-toggle-tabs" style={{ marginBottom: '1rem', background: 'var(--bg-deep)', padding: '4px', borderRadius: 'var(--radius-sm)' }}>
           <button 
             className={`view-toggle-btn ${sidebarView === 'sessions' ? 'active' : ''}`}
             onClick={() => setSidebarView('sessions')}
@@ -417,7 +417,7 @@ export default function UnifiedDashboard({ initialSessionId, onSessionLoaded }) 
             )}
           </>
         ) : (
-          <EcosystemDashboard onSelectSession={loadSession} />
+          <OverviewGrid onSelectSession={loadSession} />
         )}
       </main>
 

@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { execFile } = require('child_process');
+const si = require('systeminformation');
 const { syncClaude } = require('./parsers/claudeParser');
 const { syncAntigravity } = require('./parsers/antigravityParser');
 const store = require('./lib/entity_store');
@@ -667,6 +668,54 @@ app.get('/api/beta/search', (req, res) => {
     }
 
     res.json(results);
+});
+
+// ─── SYSTEM METRICS (OverviewGrid) ───────────────────────
+
+app.get('/api/system/metrics', async (req, res) => {
+    try {
+        const [cpuLoad, mem, network, processes] = await Promise.all([
+            si.currentLoad(),
+            si.mem(),
+            si.networkStats(),
+            si.processes()
+        ]);
+
+        // Aggregate network traffic (sum across all active interfaces)
+        let rxSec = 0;
+        let txSec = 0;
+        for (const net of network) {
+            rxSec += net.rx_sec || 0;
+            txSec += net.tx_sec || 0;
+        }
+
+        // Top 5 heaviest processes by CPU
+        const topProcs = (processes.list || [])
+            .sort((a, b) => b.cpu - a.cpu)
+            .slice(0, 5)
+            .map(p => ({
+                name: p.name,
+                cpu: p.cpu.toFixed(1),
+                mem: (p.memRss / 1024 / 1024).toFixed(1) // MB
+            }));
+
+        res.json({
+            cpu: cpuLoad.currentLoad.toFixed(1),
+            ram: {
+                used: mem.active,
+                total: mem.total,
+                percent: ((mem.active / mem.total) * 100).toFixed(1)
+            },
+            network: {
+                rxSec,
+                txSec
+            },
+            processes: topProcs
+        });
+    } catch (err) {
+        console.error('System metrics error:', err);
+        res.status(500).json({ error: 'Failed to fetch metrics' });
+    }
 });
 
 // ─── START ───────────────────────────────────────────────
