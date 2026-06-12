@@ -13,7 +13,7 @@ const PALETTE = {
   'Error':      '#c47a6a',
 };
 
-export default function OrganicGraph({ data, filters, onNodeHover, onNodeClick, highlightNodeId }) {
+export default function OrganicGraph({ data, filters, onNodeHover, onNodeClick, onBackgroundClick, highlightNodeId }) {
     const fgRef = useRef();
     const containerRef = useRef();
     const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
@@ -130,6 +130,7 @@ export default function OrganicGraph({ data, filters, onNodeHover, onNodeClick, 
                 nodeCanvasObject={paintNode}
                 onNodeHover={onNodeHover}
                 onNodeClick={onNodeClick}
+                onBackgroundClick={onBackgroundClick}
                 nodePointerAreaPaint={(node, color, ctx) => {
                     ctx.fillStyle = color;
                     ctx.beginPath();

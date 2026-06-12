@@ -154,13 +154,16 @@ export default function UnifiedDashboard({ initialSessionId, onSessionLoaded }) 
 
   // When hovering a node, fetch full content
   const handleNodeHover = useCallback((node) => {
+    // If a node is currently selected/locked, ignore hover events so the inspector doesn't jitter
+    if (highlightNodeId) return;
+
     if (!node) { setInspectedNode(null); return; }
     setInspectedNode(node);
     fetch(`${API}/entities/${node.id}`)
       .then(r => r.json())
       .then(data => setFullNodeContent(data))
       .catch(() => setFullNodeContent(null));
-  }, []);
+  }, [highlightNodeId]);
 
   // Chronological nodes for slider
   const chronologicalNodes = useMemo(() => {
@@ -183,6 +186,13 @@ export default function UnifiedDashboard({ initialSessionId, onSessionLoaded }) 
       if (idx !== -1) setSliderIndex(idx);
     }
   }, [chronologicalNodes]);
+
+  const handleBackgroundClick = useCallback(() => {
+    setHighlightNodeId(null);
+    setSliderIndex(-1);
+    setInspectedNode(null);
+    setFullNodeContent(null);
+  }, []);
 
   const goHome = () => {
     setSelectedSessionId(null);
@@ -439,6 +449,7 @@ export default function UnifiedDashboard({ initialSessionId, onSessionLoaded }) 
               filters={filters}
               onNodeHover={handleNodeHover}
               onNodeClick={handleNodeClick}
+              onBackgroundClick={handleBackgroundClick}
               highlightNodeId={highlightNodeId}
             />
 
