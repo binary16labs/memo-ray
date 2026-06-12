@@ -718,6 +718,57 @@ app.get('/api/system/metrics', async (req, res) => {
     }
 });
 
+// ─── CAPABILITIES & TOOLS (OverviewGrid) ──────────────────
+
+app.get('/api/system/capabilities', async (req, res) => {
+    try {
+        const capabilities = {
+            claude: {
+                maxContextTokens: 200000,
+                mcpServers: []
+            },
+            antigravity: {
+                maxContextTokens: 2000000,
+                plugins: []
+            }
+        };
+
+        // 1. Read Claude MCP Servers
+        const claudeConfigPath = path.join(os.homedir(), 'AppData', 'Roaming', 'Claude', 'claude_desktop_config.json');
+        try {
+            if (fs.existsSync(claudeConfigPath)) {
+                const claudeConfig = JSON.parse(fs.readFileSync(claudeConfigPath, 'utf8'));
+                if (claudeConfig.mcpServers) {
+                    capabilities.claude.mcpServers = Object.keys(claudeConfig.mcpServers).map(name => ({
+                        name,
+                        command: claudeConfig.mcpServers[name].command
+                    }));
+                }
+            }
+        } catch (e) {
+            console.error('Failed to parse Claude MCP config:', e.message);
+        }
+
+        // 2. Read Antigravity Plugins/Skills
+        const geminiPluginsPath = path.join(os.homedir(), '.gemini', 'config', 'plugins');
+        try {
+            if (fs.existsSync(geminiPluginsPath)) {
+                const dirs = fs.readdirSync(geminiPluginsPath, { withFileTypes: true });
+                capabilities.antigravity.plugins = dirs
+                    .filter(dirent => dirent.isDirectory())
+                    .map(dirent => dirent.name);
+            }
+        } catch (e) {
+            console.error('Failed to parse Antigravity plugins:', e.message);
+        }
+
+        res.json(capabilities);
+    } catch (err) {
+        console.error('Capabilities error:', err);
+        res.status(500).json({ error: 'Failed to fetch capabilities' });
+    }
+});
+
 // ─── START ───────────────────────────────────────────────
 
 app.listen(PORT, async () => {

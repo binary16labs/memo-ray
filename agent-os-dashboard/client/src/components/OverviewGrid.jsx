@@ -6,15 +6,21 @@ const API = `${import.meta.env.VITE_MEMORAY_API || 'http://localhost:3001'}/api`
 export default function OverviewGrid({ onSelectSession }) {
   const [overview, setOverview] = useState(null);
   const [sysMetrics, setSysMetrics] = useState(null);
+  const [capabilities, setCapabilities] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState(null);
 
-  // Load backend overview data
+  // Load backend overview and capabilities data
   useEffect(() => {
-    fetch(`${API}/beta/overview`)
-      .then(r => r.json())
-      .then(data => setOverview(data))
-      .catch(e => console.error('Overview fetch failed:', e));
+    Promise.all([
+      fetch(`${API}/beta/overview`).then(r => r.json()),
+      fetch(`${API}/system/capabilities`).then(r => r.json())
+    ])
+    .then(([overviewData, capsData]) => {
+      setOverview(overviewData);
+      setCapabilities(capsData);
+    })
+    .catch(e => console.error('Overview/Capabilities fetch failed:', e));
   }, []);
 
   // Poll system metrics every 3 seconds
@@ -202,6 +208,82 @@ export default function OverviewGrid({ onSelectSession }) {
               <span style={{ fontSize: '2rem', color: 'var(--golden)', fontWeight: '300' }}>{totalTokens.toLocaleString()}</span>
             </div>
           </div>
+        </div>
+
+        {/* WIDGET: AGENT CONTEXT LIMITS */}
+        <div className="zen-project-card" style={{ flexDirection: 'column', alignItems: 'flex-start', cursor: 'default' }}>
+          <h3 style={{ color: 'var(--text-tertiary)', marginBottom: '1.5rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Agent Context Limits</h3>
+          
+          {capabilities ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', width: '100%' }}>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                  <span style={{ color: 'var(--golden)', fontSize: '1.1rem' }}>Claude 3.5 (Sonnet)</span>
+                  <span style={{ color: 'var(--text-secondary)' }}>{capabilities.claude.maxContextTokens.toLocaleString()} max</span>
+                </div>
+                <div style={{ background: 'var(--bg-deep)', height: '8px', borderRadius: '4px', overflow: 'hidden' }}>
+                  {/* Mocking a 15% load for visualization since we don't have live per-session token counts streamed yet */}
+                  <div style={{ background: 'var(--golden)', height: '100%', width: `15%` }}></div>
+                </div>
+              </div>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                  <span style={{ color: 'var(--slate)', fontSize: '1.1rem' }}>Antigravity (Gemini 1.5)</span>
+                  <span style={{ color: 'var(--text-secondary)' }}>{capabilities.antigravity.maxContextTokens.toLocaleString()} max</span>
+                </div>
+                <div style={{ background: 'var(--bg-deep)', height: '8px', borderRadius: '4px', overflow: 'hidden' }}>
+                  <div style={{ background: 'var(--slate)', height: '100%', width: `5%` }}></div>
+                </div>
+              </div>
+              <div style={{ fontSize: '0.9rem', color: 'var(--text-tertiary)', marginTop: '-0.5rem' }}>
+                Bars simulate recent session context window saturation.
+              </div>
+            </div>
+          ) : (
+            <div style={{ color: 'var(--text-secondary)' }}>Loading limits...</div>
+          )}
+        </div>
+
+        {/* WIDGET: SKILLS & TOOLS REGISTRY */}
+        <div className="zen-project-card" style={{ flexDirection: 'column', alignItems: 'flex-start', cursor: 'default', gridColumn: '1 / -1' }}>
+          <h3 style={{ color: 'var(--text-tertiary)', marginBottom: '1.5rem', textTransform: 'uppercase', letterSpacing: '1px' }}>System Capabilities (Skills & Tools)</h3>
+          
+          {capabilities ? (
+            <div style={{ display: 'flex', width: '100%', gap: '3rem' }}>
+              
+              {/* Antigravity Plugins */}
+              <div style={{ flex: 1 }}>
+                <h4 style={{ color: 'var(--slate)', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ background: 'rgba(138, 154, 164, 0.1)', padding: '0.2rem 0.6rem', borderRadius: 'var(--radius-sm)' }}>Antigravity Plugins</span>
+                </h4>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  {capabilities.antigravity.plugins.length > 0 ? capabilities.antigravity.plugins.map(p => (
+                    <span key={p} style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', padding: '0.4rem 0.8rem', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', fontSize: '0.9rem' }}>
+                      {p}
+                    </span>
+                  )) : <span style={{ color: 'var(--text-tertiary)' }}>No custom plugins loaded.</span>}
+                </div>
+              </div>
+
+              {/* Claude MCP Servers */}
+              <div style={{ flex: 1 }}>
+                <h4 style={{ color: 'var(--golden)', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ background: 'rgba(196, 168, 130, 0.1)', padding: '0.2rem 0.6rem', borderRadius: 'var(--radius-sm)' }}>Claude MCP Servers</span>
+                </h4>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  {capabilities.claude.mcpServers.length > 0 ? capabilities.claude.mcpServers.map(mcp => (
+                    <div key={mcp.name} style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', padding: '0.4rem 0.8rem', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', fontSize: '0.9rem', display: 'flex', flexDirection: 'column' }}>
+                      <strong>{mcp.name}</strong>
+                      <span style={{ color: 'var(--text-tertiary)', fontSize: '0.75rem', fontFamily: 'monospace' }}>{mcp.command}</span>
+                    </div>
+                  )) : <span style={{ color: 'var(--text-tertiary)' }}>No MCP servers configured.</span>}
+                </div>
+              </div>
+
+            </div>
+          ) : (
+            <div style={{ color: 'var(--text-secondary)' }}>Scanning registries...</div>
+          )}
         </div>
 
         {/* WIDGET: RECENT SESSIONS */}
