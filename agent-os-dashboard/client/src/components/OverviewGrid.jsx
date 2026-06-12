@@ -26,15 +26,20 @@ export default function OverviewGrid({ onSelectSession }) {
   // Poll system metrics every 3 seconds
   useEffect(() => {
     const fetchMetrics = () => {
+      if (document.visibilityState === 'hidden') return; // don't burn CPU for a hidden tab
       fetch(`${API}/system/metrics`)
         .then(r => r.json())
         .then(data => setSysMetrics(data))
         .catch(e => console.error('Metrics fetch failed:', e));
     };
-    
+
     fetchMetrics(); // initial
-    const interval = setInterval(fetchMetrics, 3000);
-    return () => clearInterval(interval);
+    const interval = setInterval(fetchMetrics, 5000);
+    document.addEventListener('visibilitychange', fetchMetrics);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', fetchMetrics);
+    };
   }, []);
 
   // Debounced Search Omnibar
@@ -313,10 +318,10 @@ export default function OverviewGrid({ onSelectSession }) {
             {overview.worktrees?.length > 0 ? overview.worktrees.map(wt => (
               <div key={wt.name} style={{ background: 'var(--bg-deep)', padding: '1rem', borderRadius: 'var(--radius-md)', borderLeft: '3px solid var(--golden)' }}>
                 <div style={{ color: 'var(--text-primary)', fontWeight: '500', marginBottom: '0.2rem' }}>{wt.branch}</div>
-                <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '0.5rem' }}>Repo: {wt.baseRepo.split(/[\\/]/).pop()}</div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '0.5rem' }}>Repo: {(wt.baseRepo || 'Unknown').split(/[\\/]/).pop()}</div>
                 <div style={{ color: 'var(--text-tertiary)', fontSize: '0.75rem', display: 'flex', justifyContent: 'space-between' }}>
                   <span>{new Date(wt.createdAt).toLocaleDateString()}</span>
-                  <span style={{ fontFamily: 'monospace' }}>{wt.name.split('-').pop()}</span>
+                  <span style={{ fontFamily: 'monospace' }}>{(wt.name || '').split('-').pop()}</span>
                 </div>
               </div>
             )) : <span style={{ color: 'var(--text-tertiary)' }}>No active isolated environments.</span>}
@@ -332,12 +337,12 @@ export default function OverviewGrid({ onSelectSession }) {
               const heatPct = (file.count / maxCount) * 100;
               const isClaude = file.agent?.toLowerCase() === 'claude';
               return (
-                <div key={file.path} style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div key={file.filePath || idx} style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                   <div style={{ width: '20px', color: 'var(--text-tertiary)', fontSize: '0.8rem', textAlign: 'right' }}>#{idx + 1}</div>
                   <div style={{ flex: 1, position: 'relative', background: 'var(--bg-deep)', height: '28px', borderRadius: '4px', overflow: 'hidden', display: 'flex', alignItems: 'center' }}>
                     <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${heatPct}%`, background: isClaude ? 'rgba(196, 168, 130, 0.2)' : 'rgba(138, 154, 164, 0.2)', transition: 'width 1s ease-out' }}></div>
                     <span style={{ position: 'relative', zIndex: 1, paddingLeft: '0.8rem', color: 'var(--text-primary)', fontSize: '0.85rem', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
-                      {file.path.split(/[\\/]/).pop()}
+                      {(file?.fileName || file?.filePath || 'Unknown File').split(/[\\/]/).pop()}
                     </span>
                   </div>
                   <div style={{ width: '40px', color: isClaude ? 'var(--golden)' : 'var(--slate)', fontSize: '0.85rem', fontWeight: 'bold', textAlign: 'right' }}>

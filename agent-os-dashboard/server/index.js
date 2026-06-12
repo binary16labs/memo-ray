@@ -398,8 +398,7 @@ app.get('/api/beta/overview', (req, res) => {
                     agent: e.agent || 'Unknown',
                     count: 0,
                     lastTimestamp: 0,
-                    lastTool: '',
-                    sessions: new Set()
+                    lastTool: ''
                 });
             }
             const fObj = fileEditCounts.get(pathKey);
@@ -495,17 +494,9 @@ app.get('/api/beta/overview', (req, res) => {
     const hotFiles = Array.from(fileEditCounts.values())
         .sort((a, b) => b.count - a.count)
         .slice(0, 15)
-        .map(f => ({ ...f, sessions: undefined }));
+        .map(f => ({ ...f }));
 
     // Count unique files per agent
-    for (const e of entities.values()) {
-        if (e.metadata?.filePath) {
-            const agentKey = (e.agent || '').toLowerCase();
-            if (agentSummary[agentKey]) {
-                // counted via a Set below
-            }
-        }
-    }
     const claudeFiles = new Set();
     const antiFiles = new Set();
     for (const e of entities.values()) {
