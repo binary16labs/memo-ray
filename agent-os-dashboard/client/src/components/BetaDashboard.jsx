@@ -1,7 +1,135 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import '../zen.css';
 
 const API = `${import.meta.env.VITE_MEMORAY_API || 'http://localhost:3001'}/api`;
+
+// Helper for Smart Grouping
+const READ_TOOLS = ['grep_search', 'list_dir', 'view_file', 'search_web', 'read_url_content', 'read_file'];
+
+function groupTimeline(rawActions) {
+  const grouped = [];
+  let currentGroup = null;
+
+  for (const action of rawActions) {
+    const isReadOnly = action.type === 'Tool Call' && READ_TOOLS.includes(action.toolName);
+    
+    if (isReadOnly) {
+      if (!currentGroup) {
+        currentGroup = {
+          isGroup: true,
+          type: 'Tool Group',
+          agent: action.agent,
+          timestamp: action.timestamp,
+          items: [action],
+          id: `group-${action.id}`
+        };
+        grouped.push(currentGroup);
+      } else {
+        currentGroup.items.push(action);
+        // Update timestamp to the latest
+        currentGroup.timestamp = action.timestamp;
+      }
+    } else {
+      currentGroup = null;
+      grouped.push(action);
+    }
+  }
+  return grouped;
+}
+
+// Generate plain English explanation for actions
+function getActionHeroText(action) {
+  if (!action) return '';
+  const agentName = action.agent === 'Claude' ? 'Claude' : 'Antigravity';
+  
+  if (action.isGroup) {
+    return `${agentName} spent ${action.items.length} steps researching and reading files.`;
+  }
+
+  if (action.type === 'Tool Call') {
+    if (action.toolName === 'replace_file_content' || action.toolName === 'write_to_file' || action.toolName === 'multi_replace_file_content') {
+      return `${agentName} edited ${action.fileName || 'a file'}.`;
+    }
+    if (action.toolName === 'run_command') {
+      return `${agentName} ran a terminal command.`;
+    }
+    return `${agentName} used the ${action.toolName} tool.`;
+  }
+  
+  if (action.type === 'User Input') {
+    return `You provided new instructions to ${agentName}.`;
+  }
+  
+  if (action.type === 'Thought' || action.type === 'PLANNER_RESPONSE') {
+    return `${agentName} stopped to think and plan the next move.`;
+  }
+
+  if (action.type === 'Tool Result') {
+    return `${agentName} received the results of the tool execution.`;
+  }
+
+  if (action.type === 'Artifact') {
+    return `${agentName} created an artifact: ${action.fileName || 'Untitled'}.`;
+  }
+
+  return `${agentName} performed an action (${action.type}).`;
+}
+
+// Check if an action is a milestone
+function isMilestone(action) {
+  if (action.isGroup) return false;
+  if (action.type === 'User Input' || action.type === 'Artifact') return true;
+  if (action.type === 'Tool Call' && action.toolName === 'run_command') {
+    const snippet = action.contentSnippet || '';
+    if (snippet.includes('git commit') || snippet.includes('npm run build')) return true;
+  }
+  return false;
+}
+
+// Simple Diff Renderer
+function renderDiff(contentStr) {
+  try {
+    const parsed = JSON.parse(contentStr);
+    
+    // For replace_file_content
+    if (parsed.TargetContent && parsed.ReplacementContent) {
+      return (
+        <div className="zen-diff">
+          <div className="zen-diff-chunk">
+            {parsed.TargetContent.split('\n').map((line, i) => (
+              <div key={`old-${i}`} className="zen-diff-line removed">- {line}</div>
+            ))}
+            {parsed.ReplacementContent.split('\n').map((line, i) => (
+              <div key={`new-${i}`} className="zen-diff-line added">+ {line}</div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // For multi_replace_file_content
+    if (parsed.ReplacementChunks && Array.isArray(parsed.ReplacementChunks)) {
+      return (
+        <div className="zen-diff">
+          {parsed.ReplacementChunks.map((chunk, ci) => (
+            <div key={`chunk-${ci}`} className="zen-diff-chunk">
+              {(chunk.TargetContent || '').split('\n').map((line, i) => (
+                <div key={`old-${ci}-${i}`} className="zen-diff-line removed">- {line}</div>
+              ))}
+              {(chunk.ReplacementContent || '').split('\n').map((line, i) => (
+                <div key={`new-${ci}-${i}`} className="zen-diff-line added">+ {line}</div>
+              ))}
+            </div>
+          ))}
+        </div>
+      );
+    }
+    
+    return <pre>{JSON.stringify(parsed, null, 2)}</pre>;
+  } catch (e) {
+    return <pre>{contentStr}</pre>;
+  }
+}
 
 export default function BetaDashboard({ onNavigateToSession }) {
   const [overview, setOverview] = useState(null);
@@ -18,6 +146,15 @@ export default function BetaDashboard({ onNavigateToSession }) {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [fullEntity, setFullEntity] = useState(null);
 
+  // Features state
+  const [narratorEnabled, setNarratorEnabled] = useState(false);
+  const [showWhy, setShowWhy] = useState(false);
+  const [whyText, setWhyText] = useState('');
+
+  // Refs for Gamepad polling
+  const requestRef = useRef();
+  const lastGamepadState = useRef({});
+
   // Load overview
   useEffect(() => {
     setLoading(true);
@@ -31,18 +168,25 @@ export default function BetaDashboard({ onNavigateToSession }) {
   useEffect(() => {
     if (phase === 'step-through' && selectedSession) {
       setLoading(true);
-      fetch(`${API}/beta/timeline?limit=500&project=${encodeURIComponent(selectedSession.project)}`)
+      fetch(`${API}/beta/timeline?limit=2000&project=${encodeURIComponent(selectedSession.project)}`)
         .then(r => r.json())
         .then(data => {
-          // Filter to just this session's actions, reverse to get chronological order (oldest first)
+          // Filter to this session, reverse for chronological order
           const sessionActions = (data || [])
             .filter(a => a.sessionId === selectedSession.id)
             .reverse();
-          setTimeline(sessionActions);
+          
+          // Apply smart grouping
+          const grouped = groupTimeline(sessionActions);
+          setTimeline(grouped);
           setCurrentStepIndex(0);
+          setShowWhy(false);
           setLoading(false);
         })
         .catch(err => { console.error('Timeline failed:', err); setLoading(false); });
+    } else {
+      // Cancel speech if leaving phase
+      window.speechSynthesis.cancel();
     }
   }, [phase, selectedSession]);
 
@@ -50,13 +194,100 @@ export default function BetaDashboard({ onNavigateToSession }) {
   useEffect(() => {
     if (phase === 'step-through' && timeline.length > 0) {
       const currentAction = timeline[currentStepIndex];
-      setFullEntity(null);
-      fetch(`${API}/entities/${currentAction.id}`)
-        .then(r => r.json())
-        .then(data => setFullEntity(data))
-        .catch(() => setFullEntity(null));
+      setShowWhy(false); // Reset why text on new step
+      
+      // Handle "Why" calculation (find previous thought)
+      let foundWhy = "No specific thought log found immediately preceding this action.";
+      for (let i = currentStepIndex - 1; i >= 0; i--) {
+        const past = timeline[i];
+        if (!past.isGroup && (past.type === 'Thought' || past.type === 'PLANNER_RESPONSE') && past.agent === currentAction.agent) {
+          // Extract first sentence loosely
+          const snippet = past.contentSnippet || '';
+          foundWhy = snippet.split(/[.?\n]/)[0] + '.';
+          break;
+        }
+      }
+      setWhyText(foundWhy);
+
+      if (currentAction.isGroup) {
+        setFullEntity(null);
+      } else {
+        setFullEntity(null);
+        fetch(`${API}/entities/${currentAction.id}`)
+          .then(r => r.json())
+          .then(data => setFullEntity(data))
+          .catch(() => setFullEntity(null));
+      }
+
+      // Trigger Narrator
+      if (narratorEnabled) {
+        window.speechSynthesis.cancel();
+        const text = getActionHeroText(currentAction);
+        const msg = new SpeechSynthesisUtterance(text);
+        // Try to pick a softer voice if available
+        const voices = window.speechSynthesis.getVoices();
+        const softVoice = voices.find(v => v.name.includes('Samantha') || v.name.includes('Google US English'));
+        if (softVoice) msg.voice = softVoice;
+        msg.rate = 0.9;
+        window.speechSynthesis.speak(msg);
+      }
     }
-  }, [currentStepIndex, timeline, phase]);
+  }, [currentStepIndex, timeline, phase, narratorEnabled]);
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (phase !== 'step-through') return;
+      if (e.key === 'ArrowRight') {
+        setCurrentStepIndex(prev => Math.min(prev + 1, timeline.length - 1));
+      } else if (e.key === 'ArrowLeft') {
+        setCurrentStepIndex(prev => Math.max(prev - 1, 0));
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [phase, timeline.length]);
+
+  // Gamepad polling
+  const pollGamepads = useCallback(() => {
+    if (phase === 'step-through') {
+      const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+      for (let i = 0; i < gamepads.length; i++) {
+        const gp = gamepads[i];
+        if (!gp) continue;
+
+        // Bumper Right (Next)
+        const rbPressed = gp.buttons[5]?.pressed;
+        // Bumper Left (Prev)
+        const lbPressed = gp.buttons[4]?.pressed;
+        // D-Pad Right
+        const rightPressed = gp.buttons[15]?.pressed;
+        // D-Pad Left
+        const leftPressed = gp.buttons[14]?.pressed;
+
+        const nextTrigger = rbPressed || rightPressed;
+        const prevTrigger = lbPressed || leftPressed;
+
+        const stateKey = `gp-${gp.index}`;
+        const prevState = lastGamepadState.current[stateKey] || {};
+
+        if (nextTrigger && !prevState.next) {
+          setCurrentStepIndex(prev => Math.min(prev + 1, timeline.length - 1));
+        }
+        if (prevTrigger && !prevState.prev) {
+          setCurrentStepIndex(prev => Math.max(prev - 1, 0));
+        }
+
+        lastGamepadState.current[stateKey] = { next: nextTrigger, prev: prevTrigger };
+      }
+    }
+    requestRef.current = requestAnimationFrame(pollGamepads);
+  }, [phase, timeline.length]);
+
+  useEffect(() => {
+    requestRef.current = requestAnimationFrame(pollGamepads);
+    return () => cancelAnimationFrame(requestRef.current);
+  }, [pollGamepads]);
 
   const handleProjectSelect = (proj) => {
     setSelectedProject(proj);
@@ -66,18 +297,6 @@ export default function BetaDashboard({ onNavigateToSession }) {
   const handleSessionSelect = (session, projName) => {
     setSelectedSession({ ...session, project: projName });
     setPhase('step-through');
-  };
-
-  const handleNext = () => {
-    if (currentStepIndex < timeline.length - 1) {
-      setCurrentStepIndex(prev => prev + 1);
-    }
-  };
-
-  const handlePrev = () => {
-    if (currentStepIndex > 0) {
-      setCurrentStepIndex(prev => prev - 1);
-    }
   };
 
   if (loading && phase === 'projects') {
@@ -90,41 +309,12 @@ export default function BetaDashboard({ onNavigateToSession }) {
     );
   }
 
-  // Generate plain English explanation for actions
-  const getActionHeroText = (action) => {
-    if (!action) return '';
-    const agentName = action.agent === 'Claude' ? 'Claude' : 'Antigravity';
-    
-    if (action.type === 'Tool Call') {
-      if (action.toolName === 'replace_file_content' || action.toolName === 'write_to_file' || action.toolName === 'multi_replace_file_content') {
-        return `${agentName} edited ${action.fileName || 'a file'}.`;
-      }
-      if (action.toolName === 'run_command') {
-        return `${agentName} ran a terminal command.`;
-      }
-      if (action.toolName === 'grep_search' || action.toolName === 'search_web') {
-        return `${agentName} searched for information.`;
-      }
-      if (action.toolName === 'view_file' || action.toolName === 'list_dir') {
-        return `${agentName} reviewed ${action.fileName || 'a directory'}.`;
-      }
-      return `${agentName} used the ${action.toolName} tool.`;
-    }
-    
-    if (action.type === 'User Input') {
-      return `You provided new instructions to ${agentName}.`;
-    }
-    
-    if (action.type === 'Thought' || action.type === 'PLANNER_RESPONSE') {
-      return `${agentName} stopped to think and plan the next move.`;
-    }
-
-    if (action.type === 'Tool Result') {
-      return `${agentName} received the results of the tool execution.`;
-    }
-
-    return `${agentName} performed an action (${action.type}).`;
+  const toggleNarrator = () => {
+    if (narratorEnabled) window.speechSynthesis.cancel();
+    setNarratorEnabled(!narratorEnabled);
   };
+
+  const currentAction = timeline[currentStepIndex];
 
   return (
     <div className="zen-dashboard">
@@ -174,19 +364,45 @@ export default function BetaDashboard({ onNavigateToSession }) {
       {phase === 'step-through' && (
         <div className="zen-step-phase">
           <div className="zen-step-header">
-            <button className="zen-back-btn" style={{ margin: 0 }} onClick={() => setPhase('sessions')}>
-              ← Exit
-            </button>
-            <div className="zen-step-progress">
-              Step {timeline.length > 0 ? currentStepIndex + 1 : 0} of {timeline.length}
+            <div className="zen-step-header-top">
+              <button className="zen-back-btn" style={{ margin: 0 }} onClick={() => setPhase('sessions')}>
+                ← Exit
+              </button>
+              
+              <div className="zen-controls-group">
+                <button className={`zen-toggle-btn ${narratorEnabled ? 'active' : ''}`} onClick={toggleNarrator}>
+                  {narratorEnabled ? '🔊 Narrator On' : '🔈 Narrator Off'}
+                </button>
+                <div className="zen-step-progress">
+                  Step {timeline.length > 0 ? currentStepIndex + 1 : 0} of {timeline.length}
+                </div>
+              </div>
+
+              <div className="zen-step-nav">
+                <button className="zen-nav-btn" onClick={() => setCurrentStepIndex(prev => Math.max(prev - 1, 0))} disabled={currentStepIndex === 0 || timeline.length === 0}>
+                  ← Previous
+                </button>
+                <button className="zen-nav-btn" onClick={() => setCurrentStepIndex(prev => Math.min(prev + 1, timeline.length - 1))} disabled={currentStepIndex >= timeline.length - 1 || timeline.length === 0}>
+                  Next →
+                </button>
+              </div>
             </div>
-            <div className="zen-step-nav">
-              <button className="zen-nav-btn" onClick={handlePrev} disabled={currentStepIndex === 0 || timeline.length === 0}>
-                ← Previous
-              </button>
-              <button className="zen-nav-btn" onClick={handleNext} disabled={currentStepIndex >= timeline.length - 1 || timeline.length === 0}>
-                Next →
-              </button>
+
+            {/* Milestones Bar */}
+            <div className="zen-milestones-bar">
+              {timeline.map((act, idx) => {
+                const milestone = isMilestone(act);
+                const past = idx <= currentStepIndex;
+                const active = idx === currentStepIndex;
+                return (
+                  <div 
+                    key={act.id} 
+                    onClick={() => setCurrentStepIndex(idx)}
+                    className={`zen-milestone-segment ${milestone ? 'is-milestone' : ''} ${past ? 'past' : ''} ${active ? 'active' : ''}`}
+                    title={milestone ? getActionHeroText(act) : ''}
+                  />
+                );
+              })}
             </div>
           </div>
 
@@ -198,26 +414,53 @@ export default function BetaDashboard({ onNavigateToSession }) {
             ) : (
               <div className="zen-action-card" key={currentStepIndex}>
                 <div className="zen-action-hero">
-                  {getActionHeroText(timeline[currentStepIndex])}
+                  {getActionHeroText(currentAction)}
                 </div>
                 
                 <div className="zen-action-meta">
-                  <span className={`zen-action-agent ${timeline[currentStepIndex].agent?.toLowerCase()}`}>
-                    {timeline[currentStepIndex].agent}
+                  <span className={`zen-action-agent ${currentAction.agent?.toLowerCase()}`}>
+                    {currentAction.agent}
                   </span>
-                  <span>{new Date(timeline[currentStepIndex].timestamp).toLocaleTimeString()}</span>
-                  {timeline[currentStepIndex].fileName && (
-                    <span>📄 {timeline[currentStepIndex].fileName}</span>
+                  <span>{new Date(currentAction.timestamp).toLocaleTimeString()}</span>
+                  {currentAction.fileName && (
+                    <span>📄 {currentAction.fileName}</span>
                   )}
-                  {timeline[currentStepIndex].toolName && (
-                    <span>🔧 {timeline[currentStepIndex].toolName}</span>
+                  {currentAction.toolName && (
+                    <span>🔧 {currentAction.toolName}</span>
+                  )}
+                  
+                  {/* The Why Button */}
+                  {!currentAction.isGroup && (
+                    <button className="zen-toggle-btn" onClick={() => setShowWhy(!showWhy)}>
+                      {showWhy ? 'Hide Intent' : '🤔 Why?'}
+                    </button>
                   )}
                 </div>
 
+                {showWhy && (
+                  <div className="zen-why-box">
+                    <strong>Intent:</strong> {whyText}
+                  </div>
+                )}
+
+                {/* Content Viewer (Raw, Diff, or Group Info) */}
                 <div className="zen-file-viewer">
-                  <pre>
-                    {fullEntity?.content || timeline[currentStepIndex].contentSnippet || '(Loading content...)'}
-                  </pre>
+                  {currentAction.isGroup ? (
+                    <div style={{ color: 'var(--text-tertiary)', textAlign: 'center' }}>
+                      <p>Grouped {currentAction.items.length} read operations to reduce noise.</p>
+                      <p style={{ fontSize: '0.9em', marginTop: '1rem' }}>
+                        Includes: {Array.from(new Set(currentAction.items.map(i => i.toolName))).join(', ')}
+                      </p>
+                    </div>
+                  ) : (
+                    currentAction.toolName === 'replace_file_content' || currentAction.toolName === 'multi_replace_file_content' ? (
+                      renderDiff(fullEntity?.content || '')
+                    ) : (
+                      <pre>
+                        {fullEntity?.content || currentAction.contentSnippet || '(Loading content...)'}
+                      </pre>
+                    )
+                  )}
                 </div>
               </div>
             )}
