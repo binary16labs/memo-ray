@@ -30,6 +30,9 @@ export default function UnifiedDashboard({ initialSessionId, onSessionLoaded }) 
   const [highlightNodeId, setHighlightNodeId] = useState(null);
   const [openFileAccordions, setOpenFileAccordions] = useState({});
 
+  // Timeline Sequence State
+  const [sliderIndex, setSliderIndex] = useState(-1);
+
   // Load sessions
   useEffect(() => {
     fetch(`${API}/sessions`)
@@ -159,14 +162,27 @@ export default function UnifiedDashboard({ initialSessionId, onSessionLoaded }) 
       .catch(() => setFullNodeContent(null));
   }, []);
 
+  // Chronological nodes for slider
+  const chronologicalNodes = useMemo(() => {
+    if (!sessionData?.nodes) return [];
+    return [...sessionData.nodes].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  }, [sessionData]);
+
   const handleNodeClick = useCallback((node) => {
+    setHighlightNodeId(node.id);
     setInspectedNode(node);
     setIsInspectOpen(true);
     fetch(`${API}/entities/${node.id}`)
       .then(r => r.json())
       .then(data => setFullNodeContent(data))
       .catch(() => setFullNodeContent(null));
-  }, []);
+      
+    // Update slider index if possible
+    if (chronologicalNodes) {
+      const idx = chronologicalNodes.findIndex(n => n.id === node.id);
+      if (idx !== -1) setSliderIndex(idx);
+    }
+  }, [chronologicalNodes]);
 
   const goHome = () => {
     setSelectedSessionId(null);
@@ -178,6 +194,34 @@ export default function UnifiedDashboard({ initialSessionId, onSessionLoaded }) 
   };
 
   const toggleFilter = (key) => setFilters(prev => ({ ...prev, [key]: !prev[key] }));
+
+  // Handle Step through sequence
+  const handleStep = useCallback((index) => {
+    if (!chronologicalNodes || index < 0 || index >= chronologicalNodes.length) return;
+    const node = chronologicalNodes[index];
+    setSliderIndex(index);
+    setHighlightNodeId(node.id);
+    setInspectedNode(node);
+    setIsInspectOpen(true);
+    fetch(`${API}/entities/${node.id}`)
+      .then(r => r.json())
+      .then(data => setFullNodeContent(data))
+      .catch(() => setFullNodeContent(null));
+  }, [chronologicalNodes]);
+
+  // Keyboard Navigation
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (!selectedSessionId || chronologicalNodes.length === 0) return;
+      if (e.key === 'ArrowRight') {
+        handleStep(sliderIndex < chronologicalNodes.length - 1 ? sliderIndex + 1 : sliderIndex);
+      } else if (e.key === 'ArrowLeft') {
+        handleStep(sliderIndex > 0 ? sliderIndex - 1 : 0);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedSessionId, chronologicalNodes, sliderIndex, handleStep]);
 
   // Compute graph stats
   const graphStats = useMemo(() => {
@@ -397,6 +441,24 @@ export default function UnifiedDashboard({ initialSessionId, onSessionLoaded }) 
               onNodeClick={handleNodeClick}
               highlightNodeId={highlightNodeId}
             />
+
+            {/* Sequence Scrub Slider */}
+            {chronologicalNodes.length > 0 && (
+              <div style={{ padding: '1rem 2rem', background: 'var(--bg-base)', borderTop: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <span style={{ color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Timeline Sequence:</span>
+                <input 
+                  type="range" 
+                  min="0" 
+                  max={chronologicalNodes.length - 1} 
+                  value={sliderIndex === -1 ? 0 : sliderIndex} 
+                  onChange={(e) => handleStep(parseInt(e.target.value))}
+                  style={{ flex: 1, cursor: 'pointer' }}
+                />
+                <span style={{ color: 'var(--text-secondary)', whiteSpace: 'nowrap', width: '80px', textAlign: 'right' }}>
+                  {sliderIndex + 1} / {chronologicalNodes.length}
+                </span>
+              </div>
+            )}
 
             {/* Bottom stats */}
             {graphStats && (
