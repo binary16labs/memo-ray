@@ -6,8 +6,10 @@ const crypto = require('crypto');
 
 // Derived from the user's home — never hardcoded. Override with
 // MEMORAY_ANTIGRAVITY_DIR for non-standard installs or fixtures.
-const ANTIGRAVITY_BASE_DIR = process.env.MEMORAY_ANTIGRAVITY_DIR
-    || path.join(os.homedir(), '.gemini', 'antigravity', 'brain');
+const ANTIGRAVITY_DIRS = (process.env.MEMORAY_ANTIGRAVITY_DIR ? [process.env.MEMORAY_ANTIGRAVITY_DIR] : [
+    path.join(os.homedir(), '.gemini', 'antigravity', 'brain'),
+    path.join(os.homedir(), '.gemini', 'antigravity-ide', 'brain')
+]);
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const ENTITIES_DIR = path.join(DATA_DIR, 'entities');
 const INDEX_FILE = path.join(DATA_DIR, 'index.json');
@@ -195,17 +197,17 @@ async function syncAntigravity() {
     const newSyncTime = Date.now();
     let totalNodes = 0, totalArtifacts = 0;
 
-    if (!fs.existsSync(ANTIGRAVITY_BASE_DIR)) {
-        console.log('[Antigravity Sync] Brain directory not found, skipping.');
-        return;
-    }
+    for (const baseDir of ANTIGRAVITY_DIRS) {
+        if (!fs.existsSync(baseDir)) {
+            continue;
+        }
 
-    const sessions = fs.readdirSync(ANTIGRAVITY_BASE_DIR);
-    for (const sessionFolder of sessions) {
-        const sessionPath = path.join(ANTIGRAVITY_BASE_DIR, sessionFolder);
-        let stat;
-        try { stat = fs.statSync(sessionPath); } catch { continue; }
-        if (!stat.isDirectory()) continue;
+        const sessions = fs.readdirSync(baseDir);
+        for (const sessionFolder of sessions) {
+            const sessionPath = path.join(baseDir, sessionFolder);
+            let stat;
+            try { stat = fs.statSync(sessionPath); } catch { continue; }
+            if (!stat.isDirectory()) continue;
 
         const sessionUUID = hash(sessionFolder);
         const transcriptPath = path.join(sessionPath, '.system_generated', 'logs', 'transcript.jsonl');
@@ -234,7 +236,7 @@ async function syncAntigravity() {
 
             saveEntity({
                 id: sessionUUID, type: 'Session', agent: 'Antigravity',
-                timestamp: stat.birthtimeMs,
+                timestamp: stat.mtimeMs,
                 content: title,
                 metadata: { ...existingSession.metadata, sessionPath },
                 parent_id: null, children_ids: existingSession.children_ids || []
@@ -263,6 +265,7 @@ async function syncAntigravity() {
 
         // Parse artifacts
         totalArtifacts += parseArtifacts(sessionPath, sessionUUID, (index.antigravity_last_sync_timestamp || 0));
+        }
     }
 
     index.antigravity_last_sync_timestamp = newSyncTime;

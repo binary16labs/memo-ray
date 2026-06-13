@@ -4,6 +4,10 @@ const path = require('path');
 const readline = require('readline');
 const crypto = require('crypto');
 
+// Active Claude Code sessions directory — each .json file maps a PID to a
+// sessionId + cwd, letting us flag which sessions are currently live.
+const CLAUDE_SESSIONS_DIR = path.join(os.homedir(), '.claude', 'sessions');
+
 // Source dirs are derived from the user's home — never hardcoded.
 // Override with MEMORAY_CLAUDE_DIRS (semicolon-separated) for non-standard
 // installs or testing against fixture directories.
@@ -63,6 +67,9 @@ function extractSessionTitle(filePath) {
             if (!line.trim()) continue;
             try {
                 const entry = JSON.parse(line);
+                if (entry.type === 'ai-title' && entry.aiTitle) {
+                    return entry.aiTitle;
+                }
                 if (entry.type === 'user' && entry.message?.content) {
                     const text = typeof entry.message.content === 'string'
                         ? entry.message.content
@@ -88,15 +95,28 @@ async function parseAuditFile(filePath, sessionUUID) {
     let lineIndex = 0;
     let sessionCwd = null;
     let gitBranch = null;
+    let entrypoint = null;
+    let version = null;
+    let logSessionId = null;
 
     for await (const line of rl) {
         if (!line.trim()) continue;
         lineIndex++;
         try {
             const entry = JSON.parse(line);
-            
+
+            // Extract session-level metadata from any entry that carries it
             if (entry.cwd && !sessionCwd) sessionCwd = entry.cwd;
             if (entry.gitBranch && !gitBranch) gitBranch = entry.gitBranch;
+            if (entry.entrypoint && !entrypoint) entrypoint = entry.entrypoint;
+            if (entry.version && !version) version = entry.version;
+            if (entry.sessionId && !logSessionId) logSessionId = entry.sessionId;
+
+            // Resolve timestamp — Claude Desktop uses _audit_timestamp,
+            // Claude Code uses timestamp (ISO string at entry level).
+            const entryTs = new Date(
+                entry._audit_timestamp || entry.timestamp || Date.now()
+            ).getTime();
 
             if (entry.message?.usage) {
                 tokens += (entry.message.usage.input_tokens || 0) + (entry.message.usage.output_tokens || 0);
@@ -145,7 +165,7 @@ async function parseAuditFile(filePath, sessionUUID) {
 
                     saveEntity({
                         id: blockId, type: blockType, agent: 'Claude',
-                        timestamp: new Date(entry._audit_timestamp || Date.now()).getTime(),
+                        timestamp: entryTs,
                         content: blockContent,
                         metadata: { model: entry.message?.model || 'claude', toolName: block.name, fileName, filePath },
                         parent_id: lastNodeId, children_ids: []
@@ -182,7 +202,7 @@ async function parseAuditFile(filePath, sessionUUID) {
 
                     saveEntity({
                         id: blockId, type: blockType, agent: 'Claude',
-                        timestamp: new Date(entry._audit_timestamp || entry.timestamp || Date.now()).getTime(),
+                        timestamp: entryTs,
                         content: blockContent.substring(0, 2000),
                         metadata: { model: 'user' },
                         parent_id: lastNodeId, children_ids: []
@@ -192,10 +212,53 @@ async function parseAuditFile(filePath, sessionUUID) {
                     nodesProcessed++;
                 }
             }
+
+            // Claude Code queue-operation entries carry the user's actual
+            // prompt text in the `content` field when operation === 'enqueue'.
+            if (entry.type === 'queue-operation' && entry.operation === 'enqueue' && entry.content) {
+                const qId = hash(filePath + lineIndex + 'queue');
+                const qContent = entry.content
+                    .replace(/<[^>]+>/g, '')   // strip XML tags
+                    .replace(/\s+/g, ' ')
+                    .trim();
+                if (qContent.length > 2) {
+                    saveEntity({
+                        id: qId, type: 'User Input', agent: 'Claude',
+                        timestamp: entryTs,
+                        content: qContent.substring(0, 2000),
+                        metadata: { model: 'user', source: 'queue-operation' },
+                        parent_id: lastNodeId, children_ids: []
+                    });
+                    updateParentChild(lastNodeId, qId);
+                    lastNodeId = qId;
+                    nodesProcessed++;
+                }
+            }
+
+            // Claude Code attachment entries — file attachments the user
+            // dragged onto the prompt (@ mentions).
+            if (entry.type === 'attachment' && entry.displayPath) {
+                const aId = hash(filePath + lineIndex + 'attachment');
+                const aFileName = path.basename(entry.displayPath.replace(/\\/g, '/'));
+                saveEntity({
+                    id: aId, type: 'Artifact', agent: 'Claude',
+                    timestamp: entryTs,
+                    content: `Attached file: ${entry.displayPath}`,
+                    metadata: { fileName: aFileName, filePath: entry.displayPath, source: 'attachment' },
+                    parent_id: lastNodeId, children_ids: []
+                });
+                updateParentChild(lastNodeId, aId);
+                nodesProcessed++;
+            }
+
             // Skip system, rate_limit_event, and other noise
         } catch { /* skip malformed lines */ }
     }
-    return { nodesProcessed, tokens, cwd: sessionCwd, gitBranch };
+    return {
+        nodesProcessed, tokens,
+        cwd: sessionCwd, gitBranch,
+        entrypoint, version, logSessionId
+    };
 }
 
 function findAuditFiles(dir, filesList = []) {
@@ -234,26 +297,24 @@ async function syncClaude() {
             try { stats = fs.statSync(file); } catch { continue; }
             if (stats.mtimeMs <= (index.claude_last_sync_timestamp || 0)) continue;
 
+            // Derive a rough project name from the path — will be refined
+            // below with cwd from the parsed entries.
             let projectName = path.basename(path.dirname(path.dirname(file)));
-            if (file.toLowerCase().includes('.claude' + path.sep + 'projects')) {
-                projectName = path.basename(path.dirname(file))
-                    .replace(/^([a-zA-Z])--/, '$1:\\')
-                    .replace(/--/g, ' \\ ')
-                    .replace(/-/g, '\\');
-            }
-            console.log(`[Claude Sync] Parsing: ${path.basename(file)} (Project: ${projectName})`);
+            const isCliProject = file.toLowerCase().includes('.claude' + path.sep + 'projects');
+
+            console.log(`[Claude Sync] Parsing: ${path.basename(file)}`);
 
             const sessionUUID = hash(file);
             const title = extractSessionTitle(file) || `Session ${path.basename(file, '.jsonl')}`;
 
             let taskType = 'Chat';
-            if (file.includes('claude-code-sessions') || file.toLowerCase().includes('.claude' + path.sep + 'projects')) taskType = 'Code';
+            if (file.includes('claude-code-sessions') || isCliProject) taskType = 'Code';
             else if (file.includes('local-agent-mode-sessions')) taskType = 'Co-work';
 
             // Initialize Session so blocks can attach to it
             saveEntity({
                 id: sessionUUID, type: 'Session', agent: 'Claude',
-                timestamp: stats.birthtimeMs,
+                timestamp: stats.mtimeMs,
                 content: title,
                 metadata: { filePath: file, project: projectName, tokens: 0, taskType: taskType },
                 parent_id: null, children_ids: []
@@ -265,12 +326,27 @@ async function syncClaude() {
 
             // Parse blocks (this updates children_ids of the Session)
             const result = await parseAuditFile(file, sessionUUID);
-            
-            // Re-save session with extracted metadata
+
+            // Derive project name from the working directory the session
+            // actually ran in — far more reliable than decoding the encoded
+            // path directory name.
+            if (result.cwd) {
+                projectName = path.basename(result.cwd.replace(/\\/g, '/'));
+            }
+
+            // Re-save session with all extracted metadata
             const updatedSession = JSON.parse(fs.readFileSync(path.join(ENTITIES_DIR, `${sessionUUID}.json`), 'utf-8'));
             updatedSession.metadata.tokens = result.tokens;
+            updatedSession.metadata.project = projectName;
             if (result.cwd) updatedSession.metadata.cwd = result.cwd;
             if (result.gitBranch) updatedSession.metadata.gitBranch = result.gitBranch;
+            if (result.entrypoint) updatedSession.metadata.entrypoint = result.entrypoint;
+            if (result.version) updatedSession.metadata.version = result.version;
+            if (result.logSessionId) updatedSession.metadata.logSessionId = result.logSessionId;
+
+            // Check if this session is currently live
+            updatedSession.metadata.isActive = isSessionActive(result.logSessionId);
+
             saveEntity(updatedSession);
 
             totalNodes += result.nodesProcessed;
@@ -282,4 +358,60 @@ async function syncClaude() {
     console.log(`[Delta Sync] Complete. Parsed ${totalNodes} new/updated nodes.`);
 }
 
-module.exports = { syncClaude };
+/**
+ * Check whether a given sessionId has a live Claude Code process.
+ * Reads ~/.claude/sessions/*.json — each file maps a PID to a sessionId.
+ */
+function isSessionActive(sessionId) {
+    if (!sessionId) return false;
+    try {
+        if (!fs.existsSync(CLAUDE_SESSIONS_DIR)) return false;
+        const files = fs.readdirSync(CLAUDE_SESSIONS_DIR);
+        for (const f of files) {
+            if (!f.endsWith('.json')) continue;
+            try {
+                const data = JSON.parse(fs.readFileSync(path.join(CLAUDE_SESSIONS_DIR, f), 'utf-8'));
+                if (data.sessionId === sessionId) {
+                    // The PID is the filename (without .json)
+                    const pid = parseInt(f.replace('.json', ''), 10);
+                    try { process.kill(pid, 0); return true; } catch { return false; }
+                }
+            } catch { continue; }
+        }
+    } catch { /* ignore */ }
+    return false;
+}
+
+/**
+ * Return a summary of all currently active Claude Code sessions.
+ */
+function getActiveSessions() {
+    const sessions = [];
+    try {
+        if (!fs.existsSync(CLAUDE_SESSIONS_DIR)) return sessions;
+        const files = fs.readdirSync(CLAUDE_SESSIONS_DIR);
+        for (const f of files) {
+            if (!f.endsWith('.json')) continue;
+            try {
+                const data = JSON.parse(fs.readFileSync(path.join(CLAUDE_SESSIONS_DIR, f), 'utf-8'));
+                const pid = parseInt(f.replace('.json', ''), 10);
+                let alive = false;
+                try { process.kill(pid, 0); alive = true; } catch { /* not running */ }
+                sessions.push({
+                    pid,
+                    sessionId: data.sessionId,
+                    cwd: data.cwd,
+                    project: data.cwd ? path.basename(data.cwd.replace(/\\/g, '/')) : 'Unknown',
+                    startedAt: data.startedAt,
+                    version: data.version,
+                    kind: data.kind,
+                    entrypoint: data.entrypoint,
+                    alive
+                });
+            } catch { continue; }
+        }
+    } catch { /* ignore */ }
+    return sessions;
+}
+
+module.exports = { syncClaude, getActiveSessions };

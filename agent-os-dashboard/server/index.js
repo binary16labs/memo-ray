@@ -5,7 +5,7 @@ const path = require('path');
 const os = require('os');
 const { execFile } = require('child_process');
 const si = require('systeminformation');
-const { syncClaude } = require('./parsers/claudeParser');
+const { syncClaude, getActiveSessions } = require('./parsers/claudeParser');
 const { syncAntigravity } = require('./parsers/antigravityParser');
 const store = require('./lib/entity_store');
 
@@ -63,6 +63,12 @@ async function performSync() {
 app.get('/api/sync', async (req, res) => {
     await performSync();
     res.json({ status: 'ok', message: 'Delta sync completed.' });
+});
+
+// Active Claude Code sessions — cross-references ~/.claude/sessions/ PIDs
+// with running processes to show which sessions are live right now.
+app.get('/api/active-sessions', (req, res) => {
+    res.json(getActiveSessions());
 });
 
 app.get('/api/sessions', (req, res) => {
