@@ -360,3 +360,182 @@
 .zen-diff-line.context {
   color: var(--text-tertiary);
 }
+
+/* Breadcrumb Bar */
+.zen-breadcrumb-bar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(26, 26, 26, 0.85); /* var(--bg-deep) but slightly transparent */
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 1rem 3rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.1rem;
+  color: var(--text-tertiary);
+}
+
+.zen-breadcrumb-segment {
+  cursor: pointer;
+  transition: color 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.zen-breadcrumb-segment:hover {
+  color: var(--text-primary);
+}
+
+.zen-breadcrumb-segment.active {
+  color: var(--sage);
+  font-weight: 500;
+}
+
+.zen-breadcrumb-separator {
+  color: var(--border-subtle);
+  font-size: 0.9rem;
+}
+
+/* Sparklines */
+.zen-sparkline-container {
+  height: 30px;
+  width: 100px;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.zen-spark-bar {
+  flex: 1;
+  background: var(--sage);
+  opacity: 0.6;
+  border-radius: 2px 2px 0 0;
+  transition: opacity 0.2s, height 0.5s ease;
+}
+
+.zen-spark-bar:hover {
+  opacity: 1;
+  background: var(--taupe);
+}
+
+/* Active Session Pulse */
+.zen-active-badge {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  background-color: #4ade80; /* bright green */
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(74, 222, 128, 0.6);
+  animation: pulse-green 2s infinite;
+  margin-right: 0.5rem;
+}
+
+@keyframes pulse-green {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(74, 222, 128, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(74, 222, 128, 0); }
+}
+
+/* Worktrees */
+.zen-worktree-pills {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
+.zen-worktree-pill {
+  font-size: 0.85rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  padding: 0.2rem 0.6rem;
+  border-radius: 12px;
+  color: var(--text-secondary);
+}
+
+.zen-worktrees-section {
+  width: 100%;
+  max-width: 800px;
+  margin-bottom: 3rem;
+}
+
+.zen-section-title {
+  font-size: 1.2rem;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 0.5rem;
+  margin-bottom: 1.5rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.zen-worktree-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 1rem;
+}
+
+.zen-worktree-card {
+  background: var(--bg-base);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.zen-worktree-title {
+  font-size: 1.2rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.zen-worktree-meta {
+  font-size: 0.95rem;
+  color: var(--text-tertiary);
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.zen-disk-status {
+  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.zen-disk-status.exists { color: var(--sage); }
+.zen-disk-status.missing { color: #ffb4a8; }
+
+/* Entrypoint and Agent Grouping */
+.zen-agent-group-header {
+  font-size: 1.4rem;
+  color: var(--golden);
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px dashed var(--border-subtle);
+}
+
+.zen-agent-group-header.antigravity {
+  color: var(--slate);
+}
+
+.zen-entrypoint-badge {
+  font-size: 0.8rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}

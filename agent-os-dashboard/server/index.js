@@ -391,9 +391,9 @@ app.get('/api/beta/overview', (req, res) => {
 
     const projects = {};
     const agentSummary = { claude: { sessions: 0, nodes: 0, tokens: 0, files: 0 }, antigravity: { sessions: 0, nodes: 0, tokens: 0, files: 0 } };
-    const fileEditCounts = new Map(); // pathKey -> { fileName, filePath, agent, count, lastTimestamp, lastTool, sessions: Set }
+    const fileEditCounts = new Map();
 
-    // Build session and file data
+    // Build file interaction map
     for (const e of entities.values()) {
         if (e.metadata?.filePath) {
             const pathKey = e.metadata.filePath.toLowerCase();
@@ -417,6 +417,17 @@ app.get('/api/beta/overview', (req, res) => {
         }
     }
 
+    // 14-day histogram helper — returns an array of 14 daily counts
+    const DAY_MS = 86400000;
+    const now = Date.now();
+    const fourteenDaysAgo = now - 14 * DAY_MS;
+    function dayBucket(ts) {
+        return Math.floor((ts - fourteenDaysAgo) / DAY_MS);
+    }
+
+    // Collect all sessions with enriched metadata
+    const allSessionNodes = []; // { session, agentKey, childCount, proj, tokens }
+
     (index.sessions || []).forEach(id => {
         const session = entities.get(id);
         if (!session) return;
@@ -434,13 +445,30 @@ app.get('/api/beta/overview', (req, res) => {
 
         // Project grouping
         if (!projects[proj]) {
-            projects[proj] = { name: proj, agents: {}, totalSessions: 0, totalNodes: 0, totalTokens: 0, lastActivity: 0, files: new Set() };
+            projects[proj] = {
+                name: proj, agents: {}, totalSessions: 0, totalNodes: 0,
+                totalTokens: 0, lastActivity: 0, files: new Set(),
+                dailyNodes: new Array(14).fill(0),
+                dailyTokens: new Array(14).fill(0),
+                hasActive: false
+            };
         }
         const p = projects[proj];
         p.totalSessions++;
         p.totalNodes += childCount;
         p.totalTokens += tokens;
         if (session.timestamp > p.lastActivity) p.lastActivity = session.timestamp;
+
+        // Daily histogram — attribute nodes to the session's day
+        const bucket = dayBucket(session.timestamp);
+        if (bucket >= 0 && bucket < 14) {
+            p.dailyNodes[bucket] += childCount;
+            p.dailyTokens[bucket] += tokens;
+        }
+
+        // Track active status
+        const isActive = session.metadata?.isActive || false;
+        if (isActive) p.hasActive = true;
 
         if (!p.agents[agentKey]) {
             p.agents[agentKey] = { sessions: [] };
@@ -453,7 +481,10 @@ app.get('/api/beta/overview', (req, res) => {
             tokens: tokens,
             taskType: session.metadata?.taskType || 'Chat',
             cwd: session.metadata?.cwd || null,
-            gitBranch: session.metadata?.gitBranch || null
+            gitBranch: session.metadata?.gitBranch || null,
+            entrypoint: session.metadata?.entrypoint || null,
+            version: session.metadata?.version || null,
+            isActive: isActive
         });
 
         // Count files per project (scan children)
@@ -463,9 +494,11 @@ app.get('/api/beta/overview', (req, res) => {
                 p.files.add(child.metadata.filePath.toLowerCase());
             }
         }
+
+        allSessionNodes.push({ session, agentKey, childCount, proj, tokens });
     });
 
-    // Serialize project data (Sets -> counts)
+    // Serialize project data (Sets -> counts, arrays stay)
     const projectList = Object.values(projects).map(p => ({
         ...p,
         fileCount: p.files.size,
@@ -478,23 +511,67 @@ app.get('/api/beta/overview', (req, res) => {
         )
     })).sort((a, b) => b.lastActivity - a.lastActivity);
 
-    // Worktrees
+    // Worktrees — enriched with cross-referenced session data
     let worktrees = [];
     try {
         const wtFile = path.join(os.homedir(), 'AppData', 'Roaming', 'Claude', 'git-worktrees.json');
         if (fs.existsSync(wtFile)) {
             const wtData = JSON.parse(fs.readFileSync(wtFile, 'utf-8'));
-            worktrees = Object.values(wtData.worktrees || {}).map(wt => ({
-                name: wt.name,
-                path: wt.path,
-                baseRepo: wt.baseRepo,
-                branch: wt.branch,
-                sourceBranch: wt.sourceBranch,
-                createdAt: wt.createdAt,
-                leasedBy: wt.leasedBy
-            })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+            worktrees = Object.values(wtData.worktrees || {}).map(wt => {
+                // Find sessions that ran inside this worktree
+                const wtPathLower = (wt.path || '').toLowerCase().replace(/\\/g, '/');
+                const matchedSessions = [];
+                let wtNodes = 0;
+                let wtTokens = 0;
+
+                for (const { session, childCount, tokens } of allSessionNodes) {
+                    const sessionCwd = (session.metadata?.cwd || '').toLowerCase().replace(/\\/g, '/');
+                    if (sessionCwd && sessionCwd.includes(wt.name)) {
+                        matchedSessions.push({
+                            id: session.id,
+                            title: session.content || 'Untitled',
+                            timestamp: session.timestamp,
+                            nodes: childCount,
+                            tokens: tokens,
+                            isActive: session.metadata?.isActive || false
+                        });
+                        wtNodes += childCount;
+                        wtTokens += tokens;
+                    }
+                }
+
+                // Check if worktree directory still exists on disk
+                let existsOnDisk = false;
+                try { existsOnDisk = fs.existsSync(wt.path); } catch { /* ignore */ }
+
+                const ageMs = wt.createdAt ? now - wt.createdAt : 0;
+                const ageDays = Math.floor(ageMs / DAY_MS);
+
+                return {
+                    name: wt.name,
+                    path: wt.path,
+                    baseRepo: wt.baseRepo,
+                    project: wt.baseRepo ? path.basename(wt.baseRepo.replace(/\\/g, '/')) : 'Unknown',
+                    branch: wt.branch,
+                    sourceBranch: wt.sourceBranch,
+                    createdAt: wt.createdAt,
+                    leasedBy: wt.leasedBy,
+                    existsOnDisk,
+                    ageDays,
+                    sessions: matchedSessions.sort((a, b) => b.timestamp - a.timestamp),
+                    sessionCount: matchedSessions.length,
+                    totalNodes: wtNodes,
+                    totalTokens: wtTokens,
+                    hasActive: matchedSessions.some(s => s.isActive)
+                };
+            }).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
         }
     } catch { /* ignore */ }
+
+    // Attach worktrees to their projects
+    for (const p of projectList) {
+        p.worktrees = worktrees.filter(wt => wt.project === p.name);
+    }
 
     // Hot files (top 15 most-touched)
     const hotFiles = Array.from(fileEditCounts.values())
@@ -515,11 +592,15 @@ app.get('/api/beta/overview', (req, res) => {
     agentSummary.claude.files = claudeFiles.size;
     agentSummary.antigravity.files = antiFiles.size;
 
+    // Active sessions from Claude Code
+    const activeSessions = getActiveSessions();
+
     res.json({
         projects: projectList,
         agents: agentSummary,
         worktrees,
         hotFiles,
+        activeSessions,
         totalSessions: (index.sessions || []).length,
         totalNodes: entities.size,
         totalFiles: fileEditCounts.size,

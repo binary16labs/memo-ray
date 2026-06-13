@@ -316,46 +316,174 @@ export default function BetaDashboard({ onNavigateToSession }) {
 
   const currentAction = timeline[currentStepIndex];
 
+  // Sparkline Component
+  const Sparkline = ({ data }) => {
+    if (!data || data.length === 0) return null;
+    const max = Math.max(...data, 1); // Avoid division by zero
+    return (
+      <div className="zen-sparkline-container" title="14-day activity">
+        {data.map((val, i) => (
+          <div 
+            key={i} 
+            className="zen-spark-bar" 
+            style={{ height: `${(val / max) * 100}%` }}
+            title={`${val} nodes`}
+          />
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div className="zen-dashboard">
       
+      {/* Persistent Breadcrumb Navigation Bar */}
+      <div className="zen-breadcrumb-bar">
+        <div 
+          className={`zen-breadcrumb-segment ${phase === 'projects' ? 'active' : ''}`}
+          onClick={() => { setPhase('projects'); setSelectedProject(null); setSelectedSession(null); }}
+        >
+          🏠 Projects
+        </div>
+        
+        {selectedProject && (
+          <>
+            <span className="zen-breadcrumb-separator">/</span>
+            <div 
+              className={`zen-breadcrumb-segment ${phase === 'sessions' ? 'active' : ''}`}
+              onClick={() => { setPhase('sessions'); setSelectedSession(null); }}
+            >
+              {selectedProject.name}
+            </div>
+          </>
+        )}
+        
+        {selectedSession && (
+          <>
+            <span className="zen-breadcrumb-separator">/</span>
+            <div className={`zen-breadcrumb-segment ${phase === 'step-through' ? 'active' : ''}`}>
+              {selectedSession.title || 'Session'}
+            </div>
+          </>
+        )}
+      </div>
+
       {/* PHASE 1: Project Selection */}
       {phase === 'projects' && (
         <div className="zen-project-phase">
-          <h1 className="zen-title">Select a Project</h1>
-          <p className="zen-subtitle">Choose a workspace to review its agent activity.</p>
+          <h1 className="zen-title">Mission Control</h1>
+          <p className="zen-subtitle">Select a workspace to review its agent activity.</p>
           <div className="zen-project-list">
             {(overview?.projects || []).map(proj => (
               <div key={proj.name} className="zen-project-card" onClick={() => handleProjectSelect(proj)}>
-                <div className="zen-project-name">{proj.name}</div>
-                <div className="zen-project-meta">
-                  <span>{proj.totalSessions} Sessions</span>
-                  <span>{proj.fileCount} Files</span>
+                <div>
+                  <div className="zen-project-name">
+                    {proj.hasActive && <span className="zen-active-badge" title="Active session running"></span>}
+                    {proj.name}
+                  </div>
+                  <div className="zen-project-meta" style={{ marginTop: '0.5rem' }}>
+                    <span>{proj.totalSessions} Sessions</span>
+                    <span>{proj.fileCount} Files</span>
+                    <span>{proj.totalTokens > 0 ? `${(proj.totalTokens / 1000).toFixed(1)}k Tokens` : ''}</span>
+                  </div>
+                  {proj.worktrees && proj.worktrees.length > 0 && (
+                    <div className="zen-worktree-pills">
+                      {proj.worktrees.slice(0, 3).map(wt => (
+                        <span key={wt.name} className="zen-worktree-pill" title={`Branch: ${wt.branch}`}>
+                          🌲 {wt.name}
+                        </span>
+                      ))}
+                      {proj.worktrees.length > 3 && (
+                        <span className="zen-worktree-pill">+{proj.worktrees.length - 3} more</span>
+                      )}
+                    </div>
+                  )}
                 </div>
+                <Sparkline data={proj.dailyNodes} />
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* PHASE 2: Session Selection */}
+      {/* PHASE 2: Session Selection & Worktree Detail */}
       {phase === 'sessions' && selectedProject && (
-        <div className="zen-project-phase">
-          <button className="zen-back-btn" onClick={() => setPhase('projects')}>← Back to Projects</button>
-          <h1 className="zen-title">{selectedProject.name} Sessions</h1>
-          <p className="zen-subtitle">Select a specific session to step through the audit.</p>
+        <div className="zen-project-phase" style={{ paddingTop: '2rem' }}>
           
+          <h1 className="zen-title">
+            {selectedProject.hasActive && <span className="zen-active-badge"></span>}
+            {selectedProject.name}
+          </h1>
+          <p className="zen-subtitle">Review worktrees and recent agent sessions.</p>
+          
+          {/* Worktrees Section */}
+          {selectedProject.worktrees && selectedProject.worktrees.length > 0 && (
+            <div className="zen-worktrees-section">
+              <div className="zen-section-title">Active Worktrees ({selectedProject.worktrees.length})</div>
+              <div className="zen-worktree-cards">
+                {selectedProject.worktrees.map(wt => (
+                  <div key={wt.name} className="zen-worktree-card">
+                    <div className="zen-worktree-title">
+                      <span>{wt.name}</span>
+                      {wt.hasActive && <span className="zen-active-badge"></span>}
+                    </div>
+                    <div className="zen-worktree-meta">
+                      <span>Branch: <strong>{wt.branch?.replace('claude/', '')}</strong></span>
+                      <span>Created: {wt.ageDays} days ago</span>
+                      <span>Sessions: {wt.sessionCount}</span>
+                      <span className={`zen-disk-status ${wt.existsOnDisk ? 'exists' : 'missing'}`}>
+                        {wt.existsOnDisk ? '✅ On disk' : '❌ Removed'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Sessions Section */}
           <div className="zen-session-list">
-            {Object.entries(selectedProject.agents).map(([agentKey, agentData]) => (
-              agentData.sessions.map(s => (
-                <div key={s.id} className="zen-session-card" onClick={() => handleSessionSelect(s, selectedProject.name)}>
-                  <div className="zen-session-title">{s.title || 'Untitled Session'}</div>
-                  <div className="zen-session-date">
-                    {new Date(s.timestamp).toLocaleString()} · {agentKey === 'claude' ? 'Claude' : 'Antigravity'} · {s.nodes} steps
+            <div className="zen-section-title" style={{ marginBottom: 0 }}>All Sessions</div>
+            
+            {Object.entries(selectedProject.agents).map(([agentKey, agentData]) => {
+              if (agentData.sessions.length === 0) return null;
+              return (
+                <div key={agentKey}>
+                  <div className={`zen-agent-group-header ${agentKey}`}>
+                    {agentKey === 'claude' ? 'Claude' : 'Antigravity'}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    {agentData.sessions.map(s => (
+                      <div key={s.id} className="zen-session-card" onClick={() => handleSessionSelect(s, selectedProject.name)}>
+                        <div className="zen-session-title">
+                          {s.isActive && <span className="zen-active-badge" title="Currently Active"></span>}
+                          {s.title || 'Untitled Session'}
+                        </div>
+                        <div className="zen-session-date" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                          <span>{new Date(s.timestamp).toLocaleString()}</span>
+                          <span>·</span>
+                          <span>{s.nodes} steps</span>
+                          {s.entrypoint && (
+                            <>
+                              <span>·</span>
+                              <span className="zen-entrypoint-badge">{s.entrypoint}</span>
+                            </>
+                          )}
+                          {s.gitBranch && (
+                            <>
+                              <span>·</span>
+                              <span className="zen-worktree-pill" style={{ padding: '0 0.4rem', fontSize: '0.75rem' }}>
+                                🌿 {s.gitBranch.replace('claude/', '')}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              ))
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
