@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import UnifiedDashboard from './components/UnifiedDashboard';
 import BetaDashboard from './components/BetaDashboard';
+import AgentLifelog from './components/AgentLifelog';
 import './index.css';
 
 function App() {
@@ -24,6 +25,12 @@ function App() {
           <span className="tab-badge">β</span> Mission Control
         </button>
         <button
+          className={`app-tab ${activeTab === 'lifelog' ? 'active' : ''}`}
+          onClick={() => setActiveTab('lifelog')}
+        >
+          Agent Lifelog
+        </button>
+        <button
           className={`app-tab ${activeTab === 'original' ? 'active' : ''}`}
           onClick={() => setActiveTab('original')}
         >
@@ -31,9 +38,13 @@ function App() {
         </button>
       </div>
       <div className="app-content">
-        {activeTab === 'beta' ? (
+        {activeTab === 'beta' && (
           <BetaDashboard onNavigateToSession={handleNavigateToSession} />
-        ) : (
+        )}
+        {activeTab === 'lifelog' && (
+          <AgentLifelog />
+        )}
+        {activeTab === 'original' && (
           <UnifiedDashboard initialSessionId={pendingSessionId} onSessionLoaded={() => setPendingSessionId(null)} />
         )}
       </div>

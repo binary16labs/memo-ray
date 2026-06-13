@@ -214,6 +214,107 @@ app.get('/api/ecosystem/manifest', (req, res) => {
     });
 });
 
+const util = require('util');
+const execFileAsync = util.promisify(execFile);
+
+app.get('/api/lifelog', async (req, res) => {
+    const { entities, index } = store.load();
+    const lifelog = [];
+    const uniqueWorkspaces = new Map();
+
+    // Helper to traverse parent chain
+    function findSessionRootLocal(entityId) {
+        let currentId = entityId;
+        const visited = new Set();
+        while (currentId) {
+            if (visited.has(currentId)) break;
+            visited.add(currentId);
+            const entity = entities.get(currentId);
+            if (!entity) break;
+            if (entity.type === 'Session') return entity;
+            currentId = entity.parent_id;
+        }
+        return null;
+    }
+
+    // Extract Sessions
+    for (const id of (index.sessions || [])) {
+        const session = entities.get(id);
+        if (!session) continue;
+        const proj = session.metadata?.project || 'Unknown';
+        
+        if (session.metadata?.cwd) {
+            uniqueWorkspaces.set(session.metadata.cwd, proj);
+        }
+
+        lifelog.push({
+            id: session.id,
+            type: 'session',
+            agent: session.agent,
+            project: proj,
+            timestamp: session.timestamp,
+            content: `Started session: ${session.content}`,
+        });
+    }
+
+    // Extract Artifacts
+    for (const e of entities.values()) {
+        if (e.type === 'Artifact') {
+            const sessionRoot = findSessionRootLocal(e.parent_id || e.id);
+            const proj = sessionRoot ? (sessionRoot.metadata?.project || 'Unknown') : 'Unknown';
+            lifelog.push({
+                id: e.id,
+                type: 'artifact',
+                agent: e.agent,
+                project: proj,
+                timestamp: e.timestamp || Date.now(),
+                content: `Created artifact: ${e.metadata?.fileName || 'Unknown File'}`,
+                metadata: e.metadata
+            });
+        }
+    }
+
+    // Always ensure the memo-ray root and prime-silo are checked if not present
+    uniqueWorkspaces.set(path.resolve(__dirname, '..', '..', 'memo-ray'), 'memo-ray');
+    uniqueWorkspaces.set(path.resolve(__dirname, '..', '..', 'prime-silo'), 'prime-silo');
+
+    // Fetch Git Commits from all unique workspace paths
+    const gitPromises = Array.from(uniqueWorkspaces.entries()).map(async ([wsPath, projName]) => {
+        try {
+            const { stdout } = await execFileAsync('git', ['log', '-n', '50', '--pretty=format:%H|%an|%at|%s'], { cwd: wsPath, timeout: 5000 });
+            if (stdout) {
+                const lines = stdout.split('\n');
+                lines.forEach(line => {
+                    const [hash, author, ts, msg] = line.split('|');
+                    if (hash && author && ts && msg) {
+                        lifelog.push({
+                            id: hash,
+                            type: 'commit',
+                            agent: author.toLowerCase().includes('claude') || author.toLowerCase().includes('antigravity') ? 'Agent' : 'Developer',
+                            author: author,
+                            project: projName,
+                            timestamp: parseInt(ts, 10) * 1000,
+                            content: msg
+                        });
+                    }
+                });
+            }
+        } catch (err) {
+            // Ignore folders without git or permission issues
+        }
+    });
+
+    await Promise.all(gitPromises);
+
+    // Deduplicate
+    const uniqueLog = Array.from(new Map(lifelog.map(e => [e.id, e])).values());
+
+    // Sort descending
+    uniqueLog.sort((a, b) => b.timestamp - a.timestamp);
+    
+    res.json(uniqueLog.slice(0, 200));
+});
+
 // Get unique files touched across all sessions and their read/write timelines
 app.get('/api/files', (req, res) => {
     const { entities } = store.load();
