@@ -845,14 +845,30 @@ export default function BetaDashboard({ onNavigateToSession, pendingTeleport, on
             </div>
           </div>
 
-          <div className="zen-step-content" style={{ display: 'flex', flexDirection: 'column', width: '100%', flex: 1, minHeight: 0, boxSizing: 'border-box' }}>
+          <div className={`zen-step-content ${showGraph ? 'map-active' : ''}`} style={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            width: '100%', 
+            flex: 1, 
+            minHeight: 0, 
+            boxSizing: 'border-box',
+            overflow: showGraph ? 'hidden' : 'auto',
+            padding: showGraph ? '0' : undefined
+          }}>
             {loading ? (
               <div className="zen-title">Loading timeline...</div>
             ) : timeline.length === 0 ? (
               <div className="zen-title">No actions found for this session.</div>
             ) : (
               <>
-              <div style={{ position: 'relative', width: '100%', flex: 1, minHeight: 0, display: 'flex' }}>
+              <div style={{ 
+                position: 'relative', 
+                width: '100%', 
+                flex: showGraph ? '1 1 100%' : '1 0 auto', 
+                minHeight: showGraph ? '100%' : 0, 
+                display: 'flex',
+                justifyContent: 'center'
+              }}>
                 
                 {/* Explain Pane / Action Card */}
                 <div 
@@ -925,7 +941,7 @@ export default function BetaDashboard({ onNavigateToSession, pendingTeleport, on
 
                 {/* Full Width Graph Map Panel */}
                 {showGraph && graphData.nodes.length > 0 && (
-                  <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', background: 'var(--bg-surface)', overflow: 'hidden' }}>
+                  <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: 'var(--bg-base)', overflow: 'hidden' }}>
                     <OrganicGraph 
                       data={graphData} 
                       highlightNodeIds={currentAction?.isGroup ? currentAction.items.map(i => i.id) : [currentAction?.id]}
