@@ -64,7 +64,7 @@ export default function OrganicGraph({ data, filters = { showUser: true, showAge
         // Glow for Session, Artifact, and highlighted nodes
         if (node.type === 'Session' || node.type === 'Artifact' || isHighlighted) {
             ctx.shadowColor = isHighlighted ? '#e8c973' : color;
-            ctx.shadowBlur = isHighlighted ? 24 : 12;
+            ctx.shadowBlur = isHighlighted ? 36 : 12; // Much larger blur for highlights
         }
 
         ctx.beginPath();
@@ -91,10 +91,22 @@ export default function OrganicGraph({ data, filters = { showUser: true, showAge
 
         // Membrane
         ctx.lineWidth = Math.max(size * 0.12, 0.5);
-        ctx.strokeStyle = isHighlighted ? 'rgba(232, 201, 115, 0.8)' : `rgba(232,236,233,${node.type === 'Session' ? 0.4 : 0.15})`;
+        ctx.strokeStyle = isHighlighted ? 'rgba(255, 255, 255, 0.9)' : `rgba(232,236,233,${node.type === 'Session' ? 0.4 : 0.15})`;
         ctx.stroke();
 
         ctx.restore();
+
+        // Extra targeting ring for highlighted nodes to make them SUPER obvious
+        if (isHighlighted) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(node.x, node.y, size * 2, 0, 2 * Math.PI);
+            ctx.strokeStyle = '#e8c973';
+            ctx.lineWidth = 2 / globalScale; // Keep stroke thin even when zoomed in
+            ctx.setLineDash([4 / globalScale, 4 / globalScale]);
+            ctx.stroke();
+            ctx.restore();
+        }
 
         // Labels at zoom or if highlighted
         if (globalScale > 1.2 || isHighlighted) {

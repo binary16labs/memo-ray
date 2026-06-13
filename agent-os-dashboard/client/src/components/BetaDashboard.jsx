@@ -795,62 +795,79 @@ export default function BetaDashboard({ onNavigateToSession }) {
               <div className="zen-title">No actions found for this session.</div>
             ) : (
               <>
-                {!showGraph ? (
-                  /* Content Panel */
-                  <div className="zen-action-card" style={{ width: '100%' }}>
-                    <div className="zen-action-hero">
-                      {getActionHeroText(currentAction)}
-                    </div>
-                    
-                    <div className="zen-action-meta">
-                      <span className={`zen-action-agent ${currentAction.agent?.toLowerCase()}`}>
-                        {currentAction.agent}
-                      </span>
-                      <span>{new Date(currentAction.timestamp).toLocaleTimeString()}</span>
-                      {currentAction.fileName && (
-                        <span>📄 {currentAction.fileName}</span>
-                      )}
-                      {currentAction.toolName && (
-                        <span>🔧 {currentAction.toolName}</span>
-                      )}
-                      
-                      {/* The Why Button */}
-                      {!currentAction.isGroup && (
-                        <button className="zen-toggle-btn" onClick={() => setShowWhy(!showWhy)}>
-                          {showWhy ? 'Hide Intent' : '🤔 Why?'}
-                        </button>
-                      )}
-                    </div>
-
-                    {showWhy && (
-                      <div className="zen-why-box">
-                        <strong>Intent:</strong> {whyText}
-                      </div>
-                    )}
-
-                    {/* Content Viewer (Raw, Diff, or Group Info) */}
-                    <div className="zen-file-viewer">
-                      {currentAction.isGroup ? (
-                        <div style={{ color: 'var(--text-tertiary)', textAlign: 'center' }}>
-                          <p>Grouped {currentAction.items.length} read operations to reduce noise.</p>
-                          <p style={{ fontSize: '0.9em', marginTop: '1rem' }}>
-                            Includes: {Array.from(new Set(currentAction.items.map(i => i.toolName))).join(', ')}
-                          </p>
-                        </div>
-                      ) : (
-                        currentAction.toolName === 'replace_file_content' || currentAction.toolName === 'multi_replace_file_content' ? (
-                          renderDiff(fullEntity?.content || '')
-                        ) : (
-                          <pre>
-                            {fullEntity?.content || currentAction.contentSnippet || '(Loading content...)'}
-                          </pre>
-                        )
-                      )}
-                    </div>
+              <div style={{ position: 'relative', width: '100%', height: showGraph ? '600px' : 'auto', display: 'flex' }}>
+                
+                {/* Explain Pane / Action Card */}
+                <div 
+                  className="zen-action-card" 
+                  style={{ 
+                    width: showGraph ? '400px' : '100%',
+                    position: showGraph ? 'absolute' : 'relative',
+                    top: showGraph ? '1rem' : '0',
+                    left: showGraph ? '1rem' : '0',
+                    zIndex: 20,
+                    maxHeight: showGraph ? '560px' : 'none',
+                    overflowY: 'auto',
+                    backgroundColor: showGraph ? 'rgba(34, 38, 36, 0.95)' : 'var(--bg-surface)',
+                    backdropFilter: showGraph ? 'blur(12px)' : 'none',
+                    boxShadow: showGraph ? '0 8px 32px rgba(0,0,0,0.5)' : 'none',
+                    transition: 'all 0.3s ease'
+                  }}
+                >
+                  <div className="zen-action-hero">
+                    {getActionHeroText(currentAction)}
                   </div>
-                ) : (
-                  /* Full Width Graph Map Panel */
-                  <div style={{ position: 'relative', width: '100%', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', background: 'var(--bg-surface)', overflow: 'hidden', height: '600px' }}>
+                  
+                  <div className="zen-action-meta">
+                    <span className={`zen-action-agent ${currentAction.agent?.toLowerCase()}`}>
+                      {currentAction.agent}
+                    </span>
+                    <span>{new Date(currentAction.timestamp).toLocaleTimeString()}</span>
+                    {currentAction.fileName && (
+                      <span>📄 {currentAction.fileName}</span>
+                    )}
+                    {currentAction.toolName && (
+                      <span>🔧 {currentAction.toolName}</span>
+                    )}
+                    
+                    {/* The Why Button */}
+                    {!currentAction.isGroup && (
+                      <button className="zen-toggle-btn" onClick={() => setShowWhy(!showWhy)}>
+                        {showWhy ? 'Hide Intent' : '🤔 Why?'}
+                      </button>
+                    )}
+                  </div>
+
+                  {showWhy && (
+                    <div className="zen-why-box">
+                      <strong>Intent:</strong> {whyText}
+                    </div>
+                  )}
+
+                  {/* Content Viewer (Raw, Diff, or Group Info) */}
+                  <div className="zen-file-viewer">
+                    {currentAction.isGroup ? (
+                      <div style={{ color: 'var(--text-tertiary)', textAlign: 'center' }}>
+                        <p>Grouped {currentAction.items.length} read operations to reduce noise.</p>
+                        <p style={{ fontSize: '0.9em', marginTop: '1rem' }}>
+                          Includes: {Array.from(new Set(currentAction.items.map(i => i.toolName))).join(', ')}
+                        </p>
+                      </div>
+                    ) : (
+                      currentAction.toolName === 'replace_file_content' || currentAction.toolName === 'multi_replace_file_content' ? (
+                        renderDiff(fullEntity?.content || '')
+                      ) : (
+                        <pre>
+                          {fullEntity?.content || currentAction.contentSnippet || '(Loading content...)'}
+                        </pre>
+                      )
+                    )}
+                  </div>
+                </div>
+
+                {/* Full Width Graph Map Panel */}
+                {showGraph && graphData.nodes.length > 0 && (
+                  <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', background: 'var(--bg-surface)', overflow: 'hidden' }}>
                     <OrganicGraph 
                       data={graphData} 
                       highlightNodeIds={currentAction?.isGroup ? currentAction.items.map(i => i.id) : [currentAction?.id]}
@@ -869,6 +886,7 @@ export default function BetaDashboard({ onNavigateToSession }) {
                     />
                   </div>
                 )}
+              </div>
               </>
             )}
           </div>
