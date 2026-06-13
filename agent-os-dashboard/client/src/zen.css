@@ -539,3 +539,88 @@
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
+
+/* Live Sync Indicator */
+.zen-live-sync {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text-tertiary);
+  background: var(--bg-surface);
+  padding: 0.3rem 0.8rem;
+  border-radius: 20px;
+  border: 1px solid var(--border-subtle);
+}
+
+.zen-sync-dot {
+  width: 8px;
+  height: 8px;
+  background-color: var(--border-subtle);
+  border-radius: 50%;
+  transition: all 0.3s;
+}
+
+.zen-sync-dot.syncing {
+  background-color: #4ade80;
+  box-shadow: 0 0 8px rgba(74, 222, 128, 0.6);
+}
+
+/* Hot Files Radar Sidebar */
+.zen-hotspots-sidebar {
+  width: 300px;
+  background: var(--bg-base);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 1.5rem;
+}
+
+.zen-hot-files-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.zen-hot-file-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.95rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px dashed var(--border-subtle);
+}
+
+.zen-hot-file-name {
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+  font-family: 'Fira Code', monospace;
+}
+
+.zen-hot-file-count {
+  color: var(--text-tertiary);
+  font-size: 0.85rem;
+  background: var(--bg-surface);
+  padding: 0.2rem 0.5rem;
+  border-radius: 10px;
+}
+
+/* Search Bar */
+.zen-search-input {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  padding: 0.6rem 1rem;
+  border-radius: var(--radius-sm);
+  font-size: 1rem;
+  width: 300px;
+  outline: none;
+  transition: border-color 0.2s;
+  font-family: var(--font);
+}
+
+.zen-search-input:focus {
+  border-color: var(--sage);
+}

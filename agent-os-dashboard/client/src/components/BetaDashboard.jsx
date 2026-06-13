@@ -134,6 +134,7 @@ function renderDiff(contentStr) {
 export default function BetaDashboard({ onNavigateToSession }) {
   const [overview, setOverview] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isLiveSyncing, setIsLiveSyncing] = useState(false);
   
   // Phase state: 'projects' -> 'sessions' -> 'step-through'
   const [phase, setPhase] = useState('projects');
@@ -141,6 +142,9 @@ export default function BetaDashboard({ onNavigateToSession }) {
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedSession, setSelectedSession] = useState(null);
   
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+
   // Timeline state for step-through
   const [timeline, setTimeline] = useState([]);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -155,13 +159,33 @@ export default function BetaDashboard({ onNavigateToSession }) {
   const requestRef = useRef();
   const lastGamepadState = useRef({});
 
-  // Load overview
+  // Initial Load & Background Auto-Sync
   useEffect(() => {
+    // Initial fetch
     setLoading(true);
     fetch(`${API}/beta/overview`)
       .then(r => r.json())
       .then(data => { setOverview(data); setLoading(false); })
       .catch(err => { console.error('Overview failed:', err); setLoading(false); });
+
+    // Background polling (every 10 seconds)
+    const interval = setInterval(() => {
+      setIsLiveSyncing(true);
+      fetch(`${API}/sync`)
+        .then(() => fetch(`${API}/beta/overview`))
+        .then(r => r.json())
+        .then(data => {
+          setOverview(data);
+          
+          // If we are looking at a specific project, optionally update selectedProject stats
+          // but we rely on rendering from `overview` where possible to keep it simple.
+          
+          setTimeout(() => setIsLiveSyncing(false), 800); // give the pulse time to show
+        })
+        .catch(() => setIsLiveSyncing(false));
+    }, 10000);
+
+    return () => clearInterval(interval);
   }, []);
 
   // Load timeline when session is selected
@@ -339,12 +363,42 @@ export default function BetaDashboard({ onNavigateToSession }) {
       
       {/* Persistent Breadcrumb Navigation Bar */}
       <div className="zen-breadcrumb-bar">
-        <div 
-          className={`zen-breadcrumb-segment ${phase === 'projects' ? 'active' : ''}`}
-          onClick={() => { setPhase('projects'); setSelectedProject(null); setSelectedSession(null); }}
-        >
-          🏠 Projects
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div 
+            className={`zen-breadcrumb-segment ${phase === 'projects' ? 'active' : ''}`}
+            onClick={() => { setPhase('projects'); setSelectedProject(null); setSelectedSession(null); setSearchQuery(''); }}
+          >
+            🏠 Projects
+          </div>
+          
+          {selectedProject && (
+            <>
+              <span className="zen-breadcrumb-separator">/</span>
+              <div 
+                className={`zen-breadcrumb-segment ${phase === 'sessions' ? 'active' : ''}`}
+                onClick={() => { setPhase('sessions'); setSelectedSession(null); }}
+              >
+                {selectedProject.name}
+              </div>
+            </>
+          )}
+          
+          {selectedSession && (
+            <>
+              <span className="zen-breadcrumb-separator">/</span>
+              <div className={`zen-breadcrumb-segment ${phase === 'step-through' ? 'active' : ''}`}>
+                {selectedSession.title || 'Session'}
+              </div>
+            </>
+          )}
         </div>
+        
+        {/* Live Sync Indicator */}
+        <div className="zen-live-sync" title="Auto-syncing every 10 seconds">
+          <span className={`zen-sync-dot ${isLiveSyncing ? 'syncing' : ''}`}></span>
+          Live Sync
+        </div>
+      </div>
         
         {selectedProject && (
           <>
@@ -370,39 +424,63 @@ export default function BetaDashboard({ onNavigateToSession }) {
 
       {/* PHASE 1: Project Selection */}
       {phase === 'projects' && (
-        <div className="zen-project-phase">
-          <h1 className="zen-title">Mission Control</h1>
-          <p className="zen-subtitle">Select a workspace to review its agent activity.</p>
-          <div className="zen-project-list">
-            {(overview?.projects || []).map(proj => (
-              <div key={proj.name} className="zen-project-card" onClick={() => handleProjectSelect(proj)}>
-                <div>
-                  <div className="zen-project-name">
-                    {proj.hasActive && <span className="zen-active-badge" title="Active session running"></span>}
-                    {proj.name}
-                  </div>
-                  <div className="zen-project-meta" style={{ marginTop: '0.5rem' }}>
-                    <span>{proj.totalSessions} Sessions</span>
-                    <span>{proj.fileCount} Files</span>
-                    <span>{proj.totalTokens > 0 ? `${(proj.totalTokens / 1000).toFixed(1)}k Tokens` : ''}</span>
-                  </div>
-                  {proj.worktrees && proj.worktrees.length > 0 && (
-                    <div className="zen-worktree-pills">
-                      {proj.worktrees.slice(0, 3).map(wt => (
-                        <span key={wt.name} className="zen-worktree-pill" title={`Branch: ${wt.branch}`}>
-                          🌲 {wt.name}
-                        </span>
-                      ))}
-                      {proj.worktrees.length > 3 && (
-                        <span className="zen-worktree-pill">+{proj.worktrees.length - 3} more</span>
-                      )}
+        <div className="zen-project-phase" style={{ flexDirection: 'row', alignItems: 'flex-start', padding: '4rem', gap: '4rem' }}>
+          
+          <div style={{ flex: 1 }}>
+            <h1 className="zen-title">Mission Control</h1>
+            <p className="zen-subtitle">Select a workspace to review its agent activity.</p>
+            <div className="zen-project-list">
+              {(overview?.projects || []).map(proj => (
+                <div key={proj.name} className="zen-project-card" onClick={() => handleProjectSelect(proj)}>
+                  <div>
+                    <div className="zen-project-name">
+                      {proj.hasActive && <span className="zen-active-badge" title="Active session running"></span>}
+                      {proj.name}
                     </div>
-                  )}
+                    <div className="zen-project-meta" style={{ marginTop: '0.5rem' }}>
+                      <span>{proj.totalSessions} Sessions</span>
+                      <span>{proj.fileCount} Files</span>
+                      <span>
+                        {proj.totalTokens > 0 ? 
+                          `${(proj.totalTokens / 1000000).toFixed(2)}M Tokens (~$${((proj.totalTokens / 1000000) * 5.0).toFixed(2)})` : 
+                          ''}
+                      </span>
+                    </div>
+                    {proj.worktrees && proj.worktrees.length > 0 && (
+                      <div className="zen-worktree-pills">
+                        {proj.worktrees.slice(0, 3).map(wt => (
+                          <span key={wt.name} className="zen-worktree-pill" title={`Branch: ${wt.branch}`}>
+                            🌲 {wt.name}
+                          </span>
+                        ))}
+                        {proj.worktrees.length > 3 && (
+                          <span className="zen-worktree-pill">+{proj.worktrees.length - 3} more</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <Sparkline data={proj.dailyNodes} />
                 </div>
-                <Sparkline data={proj.dailyNodes} />
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
+
+          {/* Hot Files Radar Sidebar */}
+          {overview?.hotFiles && overview.hotFiles.length > 0 && (
+            <div className="zen-hotspots-sidebar">
+              <h2 className="zen-section-title">🔥 Code Hotspots</h2>
+              <p className="zen-subtitle" style={{ fontSize: '0.9rem', marginBottom: '1.5rem' }}>Files heavily edited across all agents.</p>
+              <div className="zen-hot-files-list">
+                {overview.hotFiles.map(hf => (
+                  <div key={hf.filePath} className="zen-hot-file-item">
+                    <div className="zen-hot-file-name" title={hf.filePath}>{hf.fileName}</div>
+                    <div className="zen-hot-file-count">{hf.count} edits</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
         </div>
       )}
 
@@ -443,17 +521,35 @@ export default function BetaDashboard({ onNavigateToSession }) {
 
           {/* Sessions Section */}
           <div className="zen-session-list">
-            <div className="zen-section-title" style={{ marginBottom: 0 }}>All Sessions</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '0.5rem' }}>
+              <div className="zen-section-title" style={{ border: 'none', margin: 0, padding: 0 }}>All Sessions</div>
+              <input 
+                type="text" 
+                className="zen-search-input" 
+                placeholder="Search sessions, branches, entrypoints..." 
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+              />
+            </div>
             
             {Object.entries(selectedProject.agents).map(([agentKey, agentData]) => {
-              if (agentData.sessions.length === 0) return null;
+              // Apply search filter
+              const sq = searchQuery.toLowerCase();
+              const filteredSessions = agentData.sessions.filter(s => 
+                !sq || 
+                (s.title || '').toLowerCase().includes(sq) || 
+                (s.gitBranch || '').toLowerCase().includes(sq) ||
+                (s.entrypoint || '').toLowerCase().includes(sq)
+              );
+
+              if (filteredSessions.length === 0) return null;
               return (
                 <div key={agentKey}>
                   <div className={`zen-agent-group-header ${agentKey}`}>
                     {agentKey === 'claude' ? 'Claude' : 'Antigravity'}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    {agentData.sessions.map(s => (
+                    {filteredSessions.map(s => (
                       <div key={s.id} className="zen-session-card" onClick={() => handleSessionSelect(s, selectedProject.name)}>
                         <div className="zen-session-title">
                           {s.isActive && <span className="zen-active-badge" title="Currently Active"></span>}
