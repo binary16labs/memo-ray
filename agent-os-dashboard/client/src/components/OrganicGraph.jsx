@@ -13,7 +13,7 @@ const PALETTE = {
   'Error':      '#c47a6a',
 };
 
-export default function OrganicGraph({ data, filters, onNodeHover, onNodeClick, onBackgroundClick, highlightNodeId }) {
+export default function OrganicGraph({ data, filters = { showUser: true, showAgent: true, showTools: true, showArtifacts: true }, onNodeHover, onNodeClick, onBackgroundClick, highlightNodeIds = [] }) {
     const fgRef = useRef();
     const containerRef = useRef();
     const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
@@ -54,8 +54,8 @@ export default function OrganicGraph({ data, filters, onNodeHover, onNodeClick, 
     }, [data, filters]);
 
     const paintNode = useCallback((node, ctx, globalScale) => {
-        const isHighlighted = node.id === highlightNodeId;
-        const color = isHighlighted ? '#00ffff' : (PALETTE[node.type] || '#5a6a5e');
+        const isHighlighted = Array.isArray(highlightNodeIds) ? highlightNodeIds.includes(node.id) : node.id === highlightNodeIds;
+        const color = isHighlighted ? '#e8c973' : (PALETTE[node.type] || '#5a6a5e'); // Gold highlight
         const size = (node.val || 6) * (isHighlighted ? 1.6 : 1);
         const label = node.label || node.type;
 
@@ -63,7 +63,7 @@ export default function OrganicGraph({ data, filters, onNodeHover, onNodeClick, 
 
         // Glow for Session, Artifact, and highlighted nodes
         if (node.type === 'Session' || node.type === 'Artifact' || isHighlighted) {
-            ctx.shadowColor = isHighlighted ? '#00ffff' : color;
+            ctx.shadowColor = isHighlighted ? '#e8c973' : color;
             ctx.shadowBlur = isHighlighted ? 24 : 12;
         }
 
@@ -91,7 +91,7 @@ export default function OrganicGraph({ data, filters, onNodeHover, onNodeClick, 
 
         // Membrane
         ctx.lineWidth = Math.max(size * 0.12, 0.5);
-        ctx.strokeStyle = isHighlighted ? 'rgba(0, 255, 255, 0.8)' : `rgba(232,236,233,${node.type === 'Session' ? 0.4 : 0.15})`;
+        ctx.strokeStyle = isHighlighted ? 'rgba(232, 201, 115, 0.8)' : `rgba(232,236,233,${node.type === 'Session' ? 0.4 : 0.15})`;
         ctx.stroke();
 
         ctx.restore();
@@ -102,12 +102,12 @@ export default function OrganicGraph({ data, filters, onNodeHover, onNodeClick, 
             ctx.font = isHighlighted ? `bold ${fontSize + 1}px Inter, system-ui` : `500 ${fontSize}px Inter, system-ui`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'top';
-            ctx.fillStyle = isHighlighted ? '#00ffff' : 'rgba(232,236,233,0.7)';
+            ctx.fillStyle = isHighlighted ? '#e8c973' : 'rgba(232,236,233,0.7)';
             const maxChars = Math.floor(20 * Math.min(globalScale / 2, 1.5));
             const text = label.length > maxChars ? label.substring(0, maxChars) + '…' : label;
             ctx.fillText(text, node.x, node.y + size + 2);
         }
-    }, [highlightNodeId]);
+    }, [highlightNodeIds]);
 
     useEffect(() => {
         if (fgRef.current && graphData.nodes.length > 0) {

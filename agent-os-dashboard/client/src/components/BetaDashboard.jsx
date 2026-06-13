@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import ForceGraph2D from 'react-force-graph-2d';
+import OrganicGraph from './OrganicGraph';
 import '../zen.css';
 
 const API = `${import.meta.env.VITE_MEMORAY_API || 'http://localhost:3001'}/api`;
@@ -851,23 +851,19 @@ export default function BetaDashboard({ onNavigateToSession }) {
               {/* Optional Graph Map Panel */}
               {showGraph && graphData.nodes.length > 0 && (
                 <div style={{ flex: 1, border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', background: 'var(--bg-surface)', overflow: 'hidden', height: '600px' }}>
-                  <ForceGraph2D
-                    ref={graphRef}
-                    graphData={graphData}
-                    nodeId="id"
-                    nodeVal={node => node.val || 8}
-                    nodeLabel="label"
-                    width={500} // Let it stretch or we can just bind to container
-                    height={600}
-                    nodeColor={node => {
-                      if (currentAction && !currentAction.isGroup && node.id === currentAction.id) return '#e8c973'; // Highlight current action node (Golden)
-                      if (currentAction && currentAction.isGroup && currentAction.items.some(i => i.id === node.id)) return '#e8c973';
-                      return node.agent === 'Claude' ? '#D6A66A' : node.agent === 'Antigravity' ? '#7A8C9E' : '#B8CDCD';
-                    }}
-                    linkColor={() => 'rgba(150, 150, 150, 0.3)'}
-                    onEngineStop={() => {
-                      if (graphRef.current) {
-                        graphRef.current.zoomToFit(400, 20);
+                  <OrganicGraph 
+                    data={graphData} 
+                    highlightNodeIds={currentAction?.isGroup ? currentAction.items.map(i => i.id) : [currentAction?.id]}
+                    onNodeClick={(node) => {
+                      // Attempt to find this node in the timeline
+                      const index = timeline.findIndex(step => {
+                        if (step.isGroup) {
+                          return step.items.some(i => i.id === node.id);
+                        }
+                        return step.id === node.id;
+                      });
+                      if (index !== -1) {
+                        setCurrentStepIndex(index);
                       }
                     }}
                   />
@@ -878,7 +874,6 @@ export default function BetaDashboard({ onNavigateToSession }) {
           </div>
         </div>
       )}
-
     </div>
   );
 }
