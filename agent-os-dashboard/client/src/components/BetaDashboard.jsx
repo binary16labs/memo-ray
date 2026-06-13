@@ -150,6 +150,10 @@ export default function BetaDashboard({ onNavigateToSession }) {
   const [timeline, setTimeline] = useState([]);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [fullEntity, setFullEntity] = useState(null);
+  
+  // Playback state
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState(2); // Steps per second
 
   // Graph state for step-through
   const [showGraph, setShowGraph] = useState(false);
@@ -324,6 +328,23 @@ export default function BetaDashboard({ onNavigateToSession }) {
     return () => cancelAnimationFrame(requestRef.current);
   }, [pollGamepads]);
 
+  // Timeline Auto-Playback
+  useEffect(() => {
+    let interval;
+    if (isPlaying && timeline.length > 0) {
+      interval = setInterval(() => {
+        setCurrentStepIndex(prev => {
+          if (prev >= timeline.length - 1) {
+            setIsPlaying(false);
+            return prev;
+          }
+          return prev + 1;
+        });
+      }, 1000 / playbackSpeed);
+    }
+    return () => clearInterval(interval);
+  }, [isPlaying, playbackSpeed, timeline.length]);
+
   const handleProjectSelect = (proj) => {
     setSelectedProject(proj);
     setPhase('sessions');
@@ -332,6 +353,7 @@ export default function BetaDashboard({ onNavigateToSession }) {
   const handleSessionSelect = (session, projName) => {
     setSelectedSession({ ...session, project: projName });
     setLoading(true);
+    setIsPlaying(false); // Stop playback on new session
     setPhase('step-through');
     
     // Fetch timeline
@@ -760,12 +782,34 @@ export default function BetaDashboard({ onNavigateToSession }) {
                 </div>
               </div>
 
-              <div className="zen-step-nav">
-                <button className="zen-nav-btn" onClick={() => setCurrentStepIndex(prev => Math.max(prev - 1, 0))} disabled={currentStepIndex === 0 || timeline.length === 0}>
-                  ← Previous
+              <div className="zen-step-nav" style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                <button className="zen-nav-btn" onClick={() => { setIsPlaying(false); setCurrentStepIndex(prev => Math.max(prev - 1, 0)); }} disabled={currentStepIndex === 0 || timeline.length === 0}>
+                  ←
                 </button>
-                <button className="zen-nav-btn" onClick={() => setCurrentStepIndex(prev => Math.min(prev + 1, timeline.length - 1))} disabled={currentStepIndex >= timeline.length - 1 || timeline.length === 0}>
-                  Next →
+                <button 
+                  className={`zen-nav-btn ${isPlaying ? 'active' : ''}`} 
+                  onClick={() => setIsPlaying(!isPlaying)} 
+                  disabled={currentStepIndex >= timeline.length - 1 || timeline.length === 0}
+                  style={{ width: '80px' }}
+                >
+                  {isPlaying ? '⏸ Pause' : '▶ Play'}
+                </button>
+                <select 
+                  className="zen-nav-btn" 
+                  style={{ appearance: 'none', textAlign: 'center', padding: '0.4rem', width: '70px', cursor: 'pointer' }}
+                  value={playbackSpeed}
+                  onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
+                  disabled={timeline.length === 0}
+                  title="Playback Speed (Steps per second)"
+                >
+                  <option value={1}>1x</option>
+                  <option value={2}>2x</option>
+                  <option value={5}>5x</option>
+                  <option value={10}>10x</option>
+                  <option value={20}>20x</option>
+                </select>
+                <button className="zen-nav-btn" onClick={() => { setIsPlaying(false); setCurrentStepIndex(prev => Math.min(prev + 1, timeline.length - 1)); }} disabled={currentStepIndex >= timeline.length - 1 || timeline.length === 0}>
+                  →
                 </button>
               </div>
             </div>
