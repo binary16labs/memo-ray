@@ -202,21 +202,24 @@ export default function BetaDashboard({ onNavigateToSession, pendingTeleport, on
     return () => clearInterval(interval);
   }, []);
 
-  // Load timeline when session is selected
+  // Load timeline and graph data when session is selected
   useEffect(() => {
     if (phase === 'step-through' && selectedSession) {
       setLoading(true);
-      fetch(`${API}/beta/timeline?limit=2000&project=${encodeURIComponent(selectedSession.project)}`)
-        .then(r => r.json())
-        .then(data => {
+      Promise.all([
+        fetch(`${API}/beta/timeline?limit=2000&project=${encodeURIComponent(selectedSession.project)}`).then(r => r.json()),
+        fetch(`${API}/graph/${selectedSession.id}`).then(r => r.json())
+      ])
+        .then(([timelineData, graphData]) => {
           // Filter to this session, reverse for chronological order
-          const sessionActions = (data || [])
+          const sessionActions = (timelineData || [])
             .filter(a => a.sessionId === selectedSession.id)
             .reverse();
           
           // Apply smart grouping
           const grouped = groupTimeline(sessionActions);
           setTimeline(grouped);
+          setGraphData(graphData || { nodes: [], links: [] });
           
           if (targetNodeRef.current) {
             const index = grouped.findIndex(step => step.id === targetNodeRef.current || step.nodeId === targetNodeRef.current || (step.items && step.items.some(n => n.id === targetNodeRef.current)));
@@ -229,7 +232,10 @@ export default function BetaDashboard({ onNavigateToSession, pendingTeleport, on
           setShowWhy(false);
           setLoading(false);
         })
-        .catch(err => { console.error('Timeline failed:', err); setLoading(false); });
+        .catch(err => {
+          console.error('Timeline/Graph loading failed:', err);
+          setLoading(false);
+        });
     } else {
       // Cancel speech if leaving phase
       window.speechSynthesis.cancel();
