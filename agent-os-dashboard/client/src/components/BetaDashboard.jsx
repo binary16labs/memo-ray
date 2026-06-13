@@ -801,12 +801,13 @@ export default function BetaDashboard({ onNavigateToSession }) {
                 <div 
                   className="zen-action-card" 
                   style={{ 
-                    width: showGraph ? '400px' : '100%',
+                    width: showGraph ? '45%' : '100%',
+                    minWidth: showGraph ? '500px' : 'auto',
                     position: showGraph ? 'absolute' : 'relative',
                     top: showGraph ? '1rem' : '0',
                     left: showGraph ? '1rem' : '0',
                     zIndex: 20,
-                    maxHeight: showGraph ? '560px' : 'none',
+                    maxHeight: showGraph ? 'calc(100% - 2rem)' : 'none',
                     overflowY: 'auto',
                     backgroundColor: showGraph ? 'rgba(34, 38, 36, 0.95)' : 'var(--bg-surface)',
                     backdropFilter: showGraph ? 'blur(12px)' : 'none',
