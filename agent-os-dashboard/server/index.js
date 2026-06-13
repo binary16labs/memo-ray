@@ -264,6 +264,7 @@ app.get('/api/lifelog', async (req, res) => {
             const proj = sessionRoot ? (sessionRoot.metadata?.project || 'Unknown') : 'Unknown';
             lifelog.push({
                 id: e.id,
+                sessionId: sessionRoot ? sessionRoot.id : null,
                 type: 'artifact',
                 agent: e.agent,
                 project: proj,

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 
 const API = 'http://localhost:3001/api';
 
-export default function AgentLifelog() {
+export default function AgentLifelog({ onTeleport }) {
     const [lifelog, setLifelog] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -35,8 +35,23 @@ export default function AgentLifelog() {
             </div>
             
             <div className="lifelog-feed">
-                {lifelog.map(item => (
-                    <div key={item.id} className={`lifelog-post ${item.type}`}>
+                {lifelog.map(item => {
+                    const isTeleportable = item.type === 'session' || (item.type === 'artifact' && item.sessionId);
+                    return (
+                    <div 
+                        key={item.id} 
+                        className={`lifelog-post ${item.type} ${isTeleportable ? 'teleportable' : ''}`}
+                        onClick={() => {
+                            if (isTeleportable && onTeleport) {
+                                onTeleport({
+                                    sessionId: item.type === 'session' ? item.id : item.sessionId,
+                                    nodeId: item.type === 'artifact' ? item.id : null,
+                                    project: item.project
+                                });
+                            }
+                        }}
+                        style={{ cursor: isTeleportable ? 'pointer' : 'default' }}
+                    >
                         <div className="lifelog-avatar">
                             {item.type === 'commit' && <span className="avatar-icon">📦</span>}
                             {item.agent === 'Claude' && <span className="avatar-icon claude">C</span>}
@@ -56,7 +71,8 @@ export default function AgentLifelog() {
                             </div>
                         </div>
                     </div>
-                ))}
+                    );
+                })}
                 
                 {lifelog.length === 0 && (
                     <div style={{ textAlign: 'center', color: 'var(--text-tertiary)', marginTop: '2rem' }}>

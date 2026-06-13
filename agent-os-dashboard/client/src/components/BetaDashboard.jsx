@@ -132,13 +132,11 @@ function renderDiff(contentStr) {
   }
 }
 
-export default function BetaDashboard({ onNavigateToSession }) {
+export default function BetaDashboard({ onNavigateToSession, pendingTeleport, onTeleportConsumed }) {
   const [overview, setOverview] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isLiveSyncing, setIsLiveSyncing] = useState(false);
-  
-  // Phase state: 'projects' -> 'sessions' -> 'step-through'
-  const [phase, setPhase] = useState('projects');
+  const [phase, setPhase] = useState('projects'); // projects -> sessions -> step-through
   
   const [selectedProject, setSelectedProject] = useState(null);
   const [selectedSession, setSelectedSession] = useState(null);
@@ -357,13 +355,16 @@ export default function BetaDashboard({ onNavigateToSession }) {
     setPhase('step-through');
     
     // Fetch timeline
-    fetch(`${API}/timeline/${session.id}`)
+    fetch(`${API}/beta/timeline?limit=2000&project=${encodeURIComponent(projName)}`)
       .then(r => r.json())
       .then(data => {
-        const sorted = data.sort((a, b) => a.timestamp - b.timestamp);
-        const grouped = groupTimeline(sorted);
+        const sessionActions = (data || [])
+          .filter(a => a.sessionId === session.id)
+          .reverse();
+        const grouped = groupTimeline(sessionActions);
         setTimeline(grouped);
         setCurrentStepIndex(0);
+        setShowWhy(false);
         setLoading(false);
       })
       .catch(err => {
@@ -379,6 +380,67 @@ export default function BetaDashboard({ onNavigateToSession }) {
       })
       .catch(err => console.error('Graph fetch failed', err));
   };
+
+  useEffect(() => {
+    if (pendingTeleport && overview) {
+      const { sessionId, nodeId, project } = pendingTeleport;
+      
+      // Find session title
+      let sessionObj = { id: sessionId, title: 'Session', project };
+      if (overview.claude?.projects[project]) {
+        const found = overview.claude.projects[project].sessions.find(s => s.id === sessionId);
+        if (found) sessionObj = { ...found, project };
+      }
+      if (overview.antigravity?.projects[project]) {
+        const found = overview.antigravity.projects[project].sessions.find(s => s.id === sessionId);
+        if (found) sessionObj = { ...found, project };
+      }
+
+      setSelectedProject(project);
+      setSelectedSession(sessionObj);
+      setLoading(true);
+      setIsPlaying(false);
+      setPhase('step-through');
+
+      // Fetch timeline
+      fetch(`${API}/beta/timeline?limit=2000&project=${encodeURIComponent(project)}`)
+        .then(r => r.json())
+        .then(data => {
+          const sessionActions = (data || [])
+            .filter(a => a.sessionId === sessionId)
+            .reverse();
+          const grouped = groupTimeline(sessionActions);
+          setTimeline(grouped);
+          setShowWhy(false);
+          
+          if (nodeId) {
+            // Find step index that contains the node
+            const index = grouped.findIndex(step => step.id === nodeId || step.nodeId === nodeId || (step.items && step.items.some(n => n.id === nodeId)));
+            setCurrentStepIndex(index >= 0 ? index : 0);
+          } else {
+            setCurrentStepIndex(0);
+          }
+          
+          setLoading(false);
+          onTeleportConsumed();
+        })
+        .catch(err => {
+          console.error('Teleport failed', err);
+          setLoading(false);
+          onTeleportConsumed();
+        });
+
+      // Fetch graph data
+      fetch(`${API}/graph/${sessionId}?limit=200`)
+        .then(r => r.json())
+        .then(data => {
+          setGraphData(data);
+        })
+        .catch(err => console.error('Graph fetch failed', err));
+    }
+  }, [pendingTeleport, overview, onTeleportConsumed]);
+
+
 
   if (loading && phase === 'projects') {
     return (

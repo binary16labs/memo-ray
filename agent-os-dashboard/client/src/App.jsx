@@ -10,9 +10,17 @@ function App() {
   // When Beta tab navigates to a session, switch to Original and load it
   const [pendingSessionId, setPendingSessionId] = useState(null);
 
+  // When Lifelog wants to teleport to Beta Dashboard
+  const [pendingTeleport, setPendingTeleport] = useState(null);
+
   const handleNavigateToSession = useCallback((sessionId) => {
     setPendingSessionId(sessionId);
     setActiveTab('original');
+  }, []);
+
+  const handleTeleport = useCallback((teleportData) => {
+    setPendingTeleport(teleportData);
+    setActiveTab('beta');
   }, []);
 
   return (
@@ -39,10 +47,10 @@ function App() {
       </div>
       <div className="app-content">
         {activeTab === 'beta' && (
-          <BetaDashboard onNavigateToSession={handleNavigateToSession} />
+          <BetaDashboard onNavigateToSession={handleNavigateToSession} pendingTeleport={pendingTeleport} onTeleportConsumed={() => setPendingTeleport(null)} />
         )}
         {activeTab === 'lifelog' && (
-          <AgentLifelog />
+          <AgentLifelog onTeleport={handleTeleport} />
         )}
         {activeTab === 'original' && (
           <UnifiedDashboard initialSessionId={pendingSessionId} onSessionLoaded={() => setPendingSessionId(null)} />
