@@ -841,7 +841,8 @@ app.get('/api/beta/timeline', (req, res) => {
         const session = sessionId ? sessionLookup.get(sessionId) : null;
 
         // Project filter
-        if (projectFilter && session?.metadata?.project !== projectFilter) continue;
+        const sessionProj = session?.metadata?.project || 'Unknown';
+        if (projectFilter && sessionProj !== projectFilter) continue;
 
         actions.push({
             id: e.id,

@@ -86,8 +86,16 @@ async function parseTranscript(filePath, sessionUUID) {
             
             if (entry.usage) tokens += (entry.usage.input_tokens || 0) + (entry.usage.output_tokens || 0);
             if (entry.tokens) tokens += entry.tokens;
-            if (!projectName && entry.workspaceUris && entry.workspaceUris.length > 0) {
-                projectName = path.basename(entry.workspaceUris[0].replace('file:///', ''));
+            if (!projectName) {
+                if (entry.workspaceUris && entry.workspaceUris.length > 0) {
+                    projectName = path.basename(entry.workspaceUris[0].replace('file:///', ''));
+                } else if (entry.content) {
+                    const cwdMatch = entry.content.match(/CWD:\s*([^\r\n]+)/);
+                    if (cwdMatch) {
+                        const cwdPath = cwdMatch[1].trim().replace(/^['"]|['"]$/g, '');
+                        projectName = path.basename(cwdPath.replace(/\\/g, '/'));
+                    }
+                }
             }
 
             const timestamp = new Date(entry.created_at || entry.timestamp || Date.now()).getTime();
