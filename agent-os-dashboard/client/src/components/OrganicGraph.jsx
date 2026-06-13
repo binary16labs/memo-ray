@@ -13,7 +13,7 @@ const PALETTE = {
   'Error':      '#c47a6a',
 };
 
-export default function OrganicGraph({ data, filters = { showUser: true, showAgent: true, showTools: true, showArtifacts: true }, onNodeHover, onNodeClick, onBackgroundClick, highlightNodeIds = [] }) {
+export default function OrganicGraph({ data, filters = { showUser: true, showAgent: true, showTools: true, showArtifacts: true }, onNodeHover, onNodeClick, onBackgroundClick, highlightNodeIds = [], layout = 'organic' }) {
     const fgRef = useRef();
     const containerRef = useRef();
     const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
@@ -30,6 +30,42 @@ export default function OrganicGraph({ data, filters = { showUser: true, showAge
         window.addEventListener('resize', measure);
         return () => window.removeEventListener('resize', measure);
     }, []);
+
+    // Handle organic vs chronological layout
+    useEffect(() => {
+        if (!data?.nodes || data.nodes.length === 0) return;
+
+        if (layout === 'chronological') {
+            // Sort nodes chronologically
+            const sortedNodes = [...data.nodes].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+            const total = sortedNodes.length;
+
+            sortedNodes.forEach((node, index) => {
+                // Position nodes horizontally based on chronological index
+                node.fx = (index - total / 2) * 80;
+                
+                // Keep the root Session node strictly at y=0, let other nodes spread out vertically
+                if (node.type === 'Session') {
+                    node.fy = 0;
+                } else {
+                    node.fy = undefined;
+                }
+            });
+        } else {
+            // Clear fixed coordinates so the force simulation can arrange organically
+            data.nodes.forEach(node => {
+                node.fx = undefined;
+                node.fy = undefined;
+            });
+        }
+
+        if (fgRef.current) {
+            fgRef.current.d3ReheatSimulation();
+            setTimeout(() => {
+                if (fgRef.current) fgRef.current.zoomToFit(400, 60);
+            }, 300);
+        }
+    }, [layout, data]);
 
     // Filter data
     const graphData = useMemo(() => {
@@ -149,12 +185,54 @@ export default function OrganicGraph({ data, filters = { showUser: true, showAge
                     ctx.arc(node.x, node.y, (node.val || 6) * 1.5, 0, 2 * Math.PI);
                     ctx.fill();
                 }}
-                linkColor={() => 'rgba(138,154,164,0.12)'}
-                linkWidth={1}
-                linkDirectionalParticles={1}
-                linkDirectionalParticleWidth={2}
-                linkDirectionalParticleSpeed={0.004}
-                linkDirectionalParticleColor={() => 'rgba(139,156,139,0.5)'}
+                linkColor={link => {
+                    const srcId = typeof link.source === 'object' ? link.source.id : link.source;
+                    const tgtId = typeof link.target === 'object' ? link.target.id : link.target;
+                    const isSourceHighlighted = Array.isArray(highlightNodeIds) ? highlightNodeIds.includes(srcId) : srcId === highlightNodeIds;
+                    const isTargetHighlighted = Array.isArray(highlightNodeIds) ? highlightNodeIds.includes(tgtId) : tgtId === highlightNodeIds;
+                    if (isSourceHighlighted && isTargetHighlighted) {
+                        return 'rgba(232, 201, 115, 0.95)'; // bright gold between active nodes
+                    }
+                    if (isSourceHighlighted || isTargetHighlighted) {
+                        return 'rgba(232, 201, 115, 0.4)'; // glowing gold
+                    }
+                    return 'rgba(138,154,164,0.12)';
+                }}
+                linkWidth={link => {
+                    const srcId = typeof link.source === 'object' ? link.source.id : link.source;
+                    const tgtId = typeof link.target === 'object' ? link.target.id : link.target;
+                    const isSourceHighlighted = Array.isArray(highlightNodeIds) ? highlightNodeIds.includes(srcId) : srcId === highlightNodeIds;
+                    const isTargetHighlighted = Array.isArray(highlightNodeIds) ? highlightNodeIds.includes(tgtId) : tgtId === highlightNodeIds;
+                    return (isSourceHighlighted || isTargetHighlighted) ? 3 : 1;
+                }}
+                linkDirectionalParticles={link => {
+                    const srcId = typeof link.source === 'object' ? link.source.id : link.source;
+                    const tgtId = typeof link.target === 'object' ? link.target.id : link.target;
+                    const isSourceHighlighted = Array.isArray(highlightNodeIds) ? highlightNodeIds.includes(srcId) : srcId === highlightNodeIds;
+                    const isTargetHighlighted = Array.isArray(highlightNodeIds) ? highlightNodeIds.includes(tgtId) : tgtId === highlightNodeIds;
+                    return (isSourceHighlighted || isTargetHighlighted) ? 4 : 1;
+                }}
+                linkDirectionalParticleWidth={link => {
+                    const srcId = typeof link.source === 'object' ? link.source.id : link.source;
+                    const tgtId = typeof link.target === 'object' ? link.target.id : link.target;
+                    const isSourceHighlighted = Array.isArray(highlightNodeIds) ? highlightNodeIds.includes(srcId) : srcId === highlightNodeIds;
+                    const isTargetHighlighted = Array.isArray(highlightNodeIds) ? highlightNodeIds.includes(tgtId) : tgtId === highlightNodeIds;
+                    return (isSourceHighlighted || isTargetHighlighted) ? 4 : 2;
+                }}
+                linkDirectionalParticleSpeed={link => {
+                    const srcId = typeof link.source === 'object' ? link.source.id : link.source;
+                    const tgtId = typeof link.target === 'object' ? link.target.id : link.target;
+                    const isSourceHighlighted = Array.isArray(highlightNodeIds) ? highlightNodeIds.includes(srcId) : srcId === highlightNodeIds;
+                    const isTargetHighlighted = Array.isArray(highlightNodeIds) ? highlightNodeIds.includes(tgtId) : tgtId === highlightNodeIds;
+                    return (isSourceHighlighted || isTargetHighlighted) ? 0.015 : 0.004;
+                }}
+                linkDirectionalParticleColor={link => {
+                    const srcId = typeof link.source === 'object' ? link.source.id : link.source;
+                    const tgtId = typeof link.target === 'object' ? link.target.id : link.target;
+                    const isSourceHighlighted = Array.isArray(highlightNodeIds) ? highlightNodeIds.includes(srcId) : srcId === highlightNodeIds;
+                    const isTargetHighlighted = Array.isArray(highlightNodeIds) ? highlightNodeIds.includes(tgtId) : tgtId === highlightNodeIds;
+                    return (isSourceHighlighted || isTargetHighlighted) ? 'rgba(232, 201, 115, 0.85)' : 'rgba(139,156,139,0.5)';
+                }}
                 d3VelocityDecay={0.25}
                 warmupTicks={50}
                 cooldownTime={3000}

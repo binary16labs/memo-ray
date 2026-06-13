@@ -156,6 +156,7 @@ export default function BetaDashboard({ onNavigateToSession, pendingTeleport, on
   // Graph state for step-through
   const [showGraph, setShowGraph] = useState(false);
   const [graphData, setGraphData] = useState({ nodes: [], links: [] });
+  const [graphLayout, setGraphLayout] = useState('organic');
   const graphRef = useRef();
 
   // Features state
@@ -796,6 +797,15 @@ export default function BetaDashboard({ onNavigateToSession, pendingTeleport, on
                 <button className={`zen-toggle-btn ${showGraph ? 'active' : ''}`} onClick={() => setShowGraph(!showGraph)}>
                   {showGraph ? '🗺️ Hide Map' : '🗺️ Show Map'}
                 </button>
+                {showGraph && (
+                  <button 
+                    className="zen-toggle-btn active" 
+                    onClick={() => setGraphLayout(graphLayout === 'organic' ? 'chronological' : 'organic')}
+                    style={{ borderColor: 'var(--taupe)', color: 'var(--taupe)' }}
+                  >
+                    {graphLayout === 'organic' ? '🧬 Organic View' : '⏳ Layered Timeline'}
+                  </button>
+                )}
                 <div className="zen-step-progress">
                   Step {timeline.length > 0 ? currentStepIndex + 1 : 0} of {timeline.length}
                 </div>
@@ -952,6 +962,7 @@ export default function BetaDashboard({ onNavigateToSession, pendingTeleport, on
                   <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: 'var(--bg-base)', overflow: 'hidden' }}>
                     <OrganicGraph 
                       data={graphData} 
+                      layout={graphLayout}
                       highlightNodeIds={currentAction?.isGroup ? currentAction.items.map(i => i.id) : [currentAction?.id]}
                       onNodeClick={(node) => {
                         // Attempt to find this node in the timeline
