@@ -155,6 +155,11 @@ export default function BetaDashboard({ onNavigateToSession }) {
   const [showWhy, setShowWhy] = useState(false);
   const [whyText, setWhyText] = useState('');
 
+  // Settings State
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [configData, setConfigData] = useState(null);
+  const [settingsLoading, setSettingsLoading] = useState(false);
+
   // Refs for Gamepad polling
   const requestRef = useRef();
   const lastGamepadState = useRef({});
@@ -358,6 +363,55 @@ export default function BetaDashboard({ onNavigateToSession }) {
     );
   };
 
+  // Settings Handlers
+  const handleOpenSettings = () => {
+    setIsSettingsOpen(true);
+    setSettingsLoading(true);
+    fetch(`${API}/config`)
+      .then(r => r.json())
+      .then(data => {
+        setConfigData(data);
+        setSettingsLoading(false);
+      })
+      .catch(e => {
+        console.error('Failed to load config', e);
+        setSettingsLoading(false);
+      });
+  };
+
+  const handleSaveSettings = () => {
+    setSettingsLoading(true);
+    fetch(`${API}/config`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(configData)
+    })
+    .then(r => r.json())
+    .then(res => {
+      alert(res.message);
+      setIsSettingsOpen(false);
+      setSettingsLoading(false);
+    })
+    .catch(e => {
+      console.error('Save failed', e);
+      alert('Failed to save config.');
+      setSettingsLoading(false);
+    });
+  };
+
+  const handleForceSync = () => {
+    setIsLiveSyncing(true);
+    fetch(`${API}/sync`)
+      .then(() => fetch(`${API}/beta/overview`))
+      .then(r => r.json())
+      .then(data => {
+        setOverview(data);
+        setIsLiveSyncing(false);
+        setIsSettingsOpen(false); // optionally close settings
+      })
+      .catch(() => setIsLiveSyncing(false));
+  };
+
   return (
     <div className="zen-dashboard">
       
@@ -393,12 +447,78 @@ export default function BetaDashboard({ onNavigateToSession }) {
           )}
         </div>
         
-        {/* Live Sync Indicator */}
-        <div className="zen-live-sync" title="Auto-syncing every 10 seconds">
-          <span className={`zen-sync-dot ${isLiveSyncing ? 'syncing' : ''}`}></span>
-          Live Sync
+        {/* Live Sync Indicator & Settings Cog */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div className="zen-live-sync" title="Auto-syncing every 10 seconds">
+            <span className={`zen-sync-dot ${isLiveSyncing ? 'syncing' : ''}`}></span>
+            Live Sync
+          </div>
+          <button className="zen-settings-btn" onClick={handleOpenSettings} title="Settings">
+            ⚙️
+          </button>
         </div>
       </div>
+
+      {/* SETTINGS MODAL */}
+      {isSettingsOpen && (
+        <div className="zen-modal-overlay">
+          <div className="zen-modal-content">
+            <div className="zen-modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h2 className="zen-title" style={{ margin: 0, fontSize: '1.5rem' }}>Configuration</h2>
+              <button onClick={() => setIsSettingsOpen(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--text-tertiary)' }}>×</button>
+            </div>
+            
+            <div style={{ marginBottom: '2rem', padding: '1rem', background: 'var(--bg-surface)', borderRadius: 'var(--radius-sm)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <strong style={{ display: 'block', color: 'var(--text-primary)' }}>Manual Synchronization</strong>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)' }}>Force the server to parse all logs right now.</span>
+              </div>
+              <button 
+                className="zen-btn" 
+                onClick={handleForceSync}
+                disabled={isLiveSyncing}
+                style={{ background: 'var(--sage)', color: 'var(--bg-base)' }}
+              >
+                {isLiveSyncing ? 'Syncing...' : 'Force Sync'}
+              </button>
+            </div>
+
+            {settingsLoading ? (
+              <div>Loading config...</div>
+            ) : configData ? (
+              <div className="zen-settings-form">
+                <div className="zen-form-group">
+                  <label>Claude Sessions Directory (PIDs)</label>
+                  <input type="text" value={configData.CLAUDE_SESSIONS_DIR} onChange={e => setConfigData({...configData, CLAUDE_SESSIONS_DIR: e.target.value})} className="zen-search-input" style={{ width: '100%' }} />
+                </div>
+                <div className="zen-form-group">
+                  <label>Claude Worktrees File</label>
+                  <input type="text" value={configData.CLAUDE_WORKTREES_PATH} onChange={e => setConfigData({...configData, CLAUDE_WORKTREES_PATH: e.target.value})} className="zen-search-input" style={{ width: '100%' }} />
+                </div>
+                <div className="zen-form-group">
+                  <label>Claude Desktop Config</label>
+                  <input type="text" value={configData.CLAUDE_CONFIG_PATH} onChange={e => setConfigData({...configData, CLAUDE_CONFIG_PATH: e.target.value})} className="zen-search-input" style={{ width: '100%' }} />
+                </div>
+                <div className="zen-form-group">
+                  <label>Gemini Config Directory</label>
+                  <input type="text" value={configData.GEMINI_CONFIG_DIR} onChange={e => setConfigData({...configData, GEMINI_CONFIG_DIR: e.target.value})} className="zen-search-input" style={{ width: '100%' }} />
+                </div>
+                
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', marginTop: '1rem' }}>
+                  Note: Editing these will write directly to <code>memoray.config.js</code>. The server requires a restart after saving. Array paths (like CLAUDE_LOG_DIRS) must currently be edited in the file manually.
+                </p>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '2rem' }}>
+                  <button className="zen-btn" onClick={() => setIsSettingsOpen(false)} style={{ background: 'var(--bg-surface)', color: 'var(--text-primary)' }}>Cancel</button>
+                  <button className="zen-btn" onClick={handleSaveSettings} style={{ background: 'var(--sage)', color: 'var(--bg-base)' }}>Save Changes</button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ color: 'var(--danger)' }}>Failed to load configuration.</div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* PHASE 1: Project Selection */}
       {phase === 'projects' && (

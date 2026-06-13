@@ -624,3 +624,55 @@
 .zen-search-input:focus {
   border-color: var(--sage);
 }
+
+/* Settings Modal & Buttons */
+.zen-settings-btn {
+  background: transparent;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  transition: transform 0.2s;
+  padding: 0;
+  display: flex;
+  align-items: center;
+}
+
+.zen-settings-btn:hover {
+  transform: rotate(45deg);
+}
+
+.zen-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.zen-modal-content {
+  background: var(--bg-base);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 2.5rem;
+  width: 100%;
+  max-width: 600px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+}
+
+.zen-form-group {
+  margin-bottom: 1.2rem;
+}
+
+.zen-form-group label {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  margin-bottom: 0.4rem;
+  font-family: 'Fira Code', monospace;
+}

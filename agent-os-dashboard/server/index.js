@@ -69,6 +69,65 @@ app.get('/api/sync', async (req, res) => {
     res.json({ status: 'ok', message: 'Delta sync completed.' });
 });
 
+// Config Endpoints
+app.get('/api/config', (req, res) => {
+    // Send the current config object
+    res.json(config);
+});
+
+app.post('/api/config', (req, res) => {
+    try {
+        const newConfig = req.body;
+        const configPath = path.join(__dirname, '..', 'memoray.config.js');
+        let fileContent = fs.readFileSync(configPath, 'utf8');
+
+        // Regex replacements to safely update strings in the JS file without destroying comments
+        const updates = {
+            'CLAUDE_SESSIONS_DIR': newConfig.CLAUDE_SESSIONS_DIR,
+            'CLAUDE_WORKTREES_PATH': newConfig.CLAUDE_WORKTREES_PATH,
+            'CLAUDE_CONFIG_PATH': newConfig.CLAUDE_CONFIG_PATH,
+            'GEMINI_CONFIG_DIR': newConfig.GEMINI_CONFIG_DIR
+        };
+
+        for (const [key, val] of Object.entries(updates)) {
+            if (val) {
+                // Matches: KEY: path.join(...) or KEY: '...' or KEY: "..."
+                // Since our config uses JS logic (path.join, isWin ? ... : ...), we'll do a simpler replacement:
+                // We will just rewrite the file content if it was a plain JSON, but since it's JS with conditional logic,
+                // we should be very careful. Actually, if the user edits it, we might just replace the entire value with a string literal for simplicity,
+                // OR we can just instruct the user that updating through the UI converts the dynamic path.join to a hardcoded string.
+                // Let's replace the right hand side of the colon until the comma or end of line.
+                const regex = new RegExp(`(${key}\\s*:\\s*)([^,\\n]+)(,?)(?=\\s*\\n|\\s*//|$)`, 'g');
+                // We use JSON.stringify to ensure it's safely quoted and escaped
+                fileContent = fileContent.replace(regex, `$1${JSON.stringify(val)}$3`);
+            }
+        }
+        
+        // Handle Arrays (CLAUDE_LOG_DIRS, ANTIGRAVITY_BRAIN_DIRS)
+        const arrayUpdates = {
+            'CLAUDE_LOG_DIRS': newConfig.CLAUDE_LOG_DIRS,
+            'ANTIGRAVITY_BRAIN_DIRS': newConfig.ANTIGRAVITY_BRAIN_DIRS
+        };
+
+        for (const [key, val] of Object.entries(arrayUpdates)) {
+            if (Array.isArray(val)) {
+                // Matches: KEY: [ ... ]
+                const regex = new RegExp(`(${key}\\s*:\\s*\\[)([^\\]]+)(\\])`, 'g');
+                const arrayString = val.map(v => JSON.stringify(v)).join(',\n        ');
+                fileContent = fileContent.replace(regex, `$1\n        ${arrayString}\n    $3`);
+            }
+        }
+
+        fs.writeFileSync(configPath, fileContent, 'utf8');
+        
+        // We must tell the user that the server needs a restart for changes to apply
+        res.json({ status: 'ok', message: 'Config saved successfully. Please restart the Memo-Ray server.' });
+    } catch (e) {
+        console.error('[Server] Config save failed:', e);
+        res.status(500).json({ error: 'Failed to save config' });
+    }
+});
+
 // Active Claude Code sessions — cross-references ~/.claude/sessions/ PIDs
 // with running processes to show which sessions are live right now.
 app.get('/api/active-sessions', (req, res) => {
