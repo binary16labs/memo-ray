@@ -788,14 +788,14 @@ export default function BetaDashboard({ onNavigateToSession }) {
             </div>
           </div>
 
-          <div className="zen-step-content" style={{ display: 'flex', flexDirection: 'column', width: '100%', boxSizing: 'border-box' }}>
+          <div className="zen-step-content" style={{ display: 'flex', flexDirection: 'column', width: '100%', flex: 1, minHeight: 0, boxSizing: 'border-box' }}>
             {loading ? (
               <div className="zen-title">Loading timeline...</div>
             ) : timeline.length === 0 ? (
               <div className="zen-title">No actions found for this session.</div>
             ) : (
               <>
-              <div style={{ position: 'relative', width: '100%', height: showGraph ? '600px' : 'auto', display: 'flex' }}>
+              <div style={{ position: 'relative', width: '100%', flex: 1, minHeight: 0, display: 'flex' }}>
                 
                 {/* Explain Pane / Action Card */}
                 <div 
