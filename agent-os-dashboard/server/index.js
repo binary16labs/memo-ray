@@ -5,6 +5,10 @@ const path = require('path');
 const os = require('os');
 const { execFile } = require('child_process');
 const si = require('systeminformation');
+
+// Load central configuration contract
+const config = require('../memoray.config.js');
+
 const { syncClaude, getActiveSessions } = require('./parsers/claudeParser');
 const { syncAntigravity } = require('./parsers/antigravityParser');
 const store = require('./lib/entity_store');
@@ -514,7 +518,7 @@ app.get('/api/beta/overview', (req, res) => {
     // Worktrees — enriched with cross-referenced session data
     let worktrees = [];
     try {
-        const wtFile = path.join(os.homedir(), 'AppData', 'Roaming', 'Claude', 'git-worktrees.json');
+        const wtFile = config.CLAUDE_WORKTREES_PATH;
         if (fs.existsSync(wtFile)) {
             const wtData = JSON.parse(fs.readFileSync(wtFile, 'utf-8'));
             worktrees = Object.values(wtData.worktrees || {}).map(wt => {
@@ -813,7 +817,7 @@ app.get('/api/system/capabilities', async (req, res) => {
         };
 
         // 1. Read Claude MCP Servers
-        const claudeConfigPath = path.join(os.homedir(), 'AppData', 'Roaming', 'Claude', 'claude_desktop_config.json');
+        const claudeConfigPath = config.CLAUDE_CONFIG_PATH;
         try {
             if (fs.existsSync(claudeConfigPath)) {
                 const claudeConfig = JSON.parse(fs.readFileSync(claudeConfigPath, 'utf8'));
@@ -829,7 +833,7 @@ app.get('/api/system/capabilities', async (req, res) => {
         }
 
         // 2. Read Antigravity Plugins/Skills & Permissions
-        const geminiConfigDir = path.join(os.homedir(), '.gemini', 'config');
+        const geminiConfigDir = config.GEMINI_CONFIG_DIR;
         try {
             const pluginsPath = path.join(geminiConfigDir, 'plugins');
             if (fs.existsSync(pluginsPath)) {

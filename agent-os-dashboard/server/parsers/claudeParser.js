@@ -4,22 +4,16 @@ const path = require('path');
 const readline = require('readline');
 const crypto = require('crypto');
 
-// Active Claude Code sessions directory — each .json file maps a PID to a
-// sessionId + cwd, letting us flag which sessions are currently live.
-const CLAUDE_SESSIONS_DIR = path.join(os.homedir(), '.claude', 'sessions');
+// Load central configuration contract
+const config = require('../../memoray.config.js');
 
-// Source dirs are derived from the user's home — never hardcoded.
-// Override with MEMORAY_CLAUDE_DIRS (semicolon-separated) for non-standard
-// installs or testing against fixture directories.
-const userHome = os.homedir();
-const DEFAULT_CLAUDE_BASE_DIRS = [
-    path.join(userHome, 'AppData', 'Roaming', 'Claude', 'local-agent-mode-sessions'),
-    path.join(userHome, 'AppData', 'Roaming', 'Claude', 'claude-code-sessions'),
-    path.join(userHome, '.claude', 'projects')
-];
+// Active Claude Code sessions directory
+const CLAUDE_SESSIONS_DIR = config.CLAUDE_SESSIONS_DIR;
+
+// Override with MEMORAY_CLAUDE_DIRS for testing against fixtures
 const CLAUDE_BASE_DIRS = process.env.MEMORAY_CLAUDE_DIRS
     ? process.env.MEMORAY_CLAUDE_DIRS.split(';').map(p => p.trim()).filter(Boolean)
-    : DEFAULT_CLAUDE_BASE_DIRS;
+    : config.CLAUDE_LOG_DIRS;
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const ENTITIES_DIR = path.join(DATA_DIR, 'entities');
 const INDEX_FILE = path.join(DATA_DIR, 'index.json');
