@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import ForceGraph2D from 'react-force-graph-2d';
 import '../zen.css';
 
 const API = `${import.meta.env.VITE_MEMORAY_API || 'http://localhost:3001'}/api`;
@@ -149,6 +150,11 @@ export default function BetaDashboard({ onNavigateToSession }) {
   const [timeline, setTimeline] = useState([]);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [fullEntity, setFullEntity] = useState(null);
+
+  // Graph state for step-through
+  const [showGraph, setShowGraph] = useState(false);
+  const [graphData, setGraphData] = useState({ nodes: [], links: [] });
+  const graphRef = useRef();
 
   // Features state
   const [narratorEnabled, setNarratorEnabled] = useState(false);
@@ -325,7 +331,31 @@ export default function BetaDashboard({ onNavigateToSession }) {
 
   const handleSessionSelect = (session, projName) => {
     setSelectedSession({ ...session, project: projName });
+    setLoading(true);
     setPhase('step-through');
+    
+    // Fetch timeline
+    fetch(`${API}/timeline/${session.id}`)
+      .then(r => r.json())
+      .then(data => {
+        const sorted = data.sort((a, b) => a.timestamp - b.timestamp);
+        const grouped = groupTimeline(sorted);
+        setTimeline(grouped);
+        setCurrentStepIndex(0);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error('Timeline fetch failed', err);
+        setLoading(false);
+      });
+
+    // Fetch graph data independently
+    fetch(`${API}/graph/${session.id}?limit=200`)
+      .then(r => r.json())
+      .then(data => {
+        setGraphData(data);
+      })
+      .catch(err => console.error('Graph fetch failed', err));
   };
 
   if (loading && phase === 'projects') {
@@ -722,6 +752,9 @@ export default function BetaDashboard({ onNavigateToSession }) {
                 <button className={`zen-toggle-btn ${narratorEnabled ? 'active' : ''}`} onClick={toggleNarrator}>
                   {narratorEnabled ? '🔊 Narrator On' : '🔈 Narrator Off'}
                 </button>
+                <button className={`zen-toggle-btn ${showGraph ? 'active' : ''}`} onClick={() => setShowGraph(!showGraph)}>
+                  {showGraph ? '🗺️ Hide Map' : '🗺️ Show Map'}
+                </button>
                 <div className="zen-step-progress">
                   Step {timeline.length > 0 ? currentStepIndex + 1 : 0} of {timeline.length}
                 </div>
@@ -755,13 +788,15 @@ export default function BetaDashboard({ onNavigateToSession }) {
             </div>
           </div>
 
-          <div className="zen-step-content">
+          <div className="zen-step-content" style={{ display: 'flex', flexDirection: 'row', gap: '2rem', padding: '2rem', width: '100%', boxSizing: 'border-box' }}>
             {loading ? (
               <div className="zen-title">Loading timeline...</div>
             ) : timeline.length === 0 ? (
               <div className="zen-title">No actions found for this session.</div>
             ) : (
-              <div className="zen-action-card" key={currentStepIndex}>
+              <>
+                {/* Content Panel */}
+                <div className="zen-action-card" style={{ flex: 1, minWidth: '50%' }}>
                 <div className="zen-action-hero">
                   {getActionHeroText(currentAction)}
                 </div>
@@ -812,6 +847,33 @@ export default function BetaDashboard({ onNavigateToSession }) {
                   )}
                 </div>
               </div>
+              
+              {/* Optional Graph Map Panel */}
+              {showGraph && graphData.nodes.length > 0 && (
+                <div style={{ flex: 1, border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', background: 'var(--bg-surface)', overflow: 'hidden', height: '600px' }}>
+                  <ForceGraph2D
+                    ref={graphRef}
+                    graphData={graphData}
+                    nodeId="id"
+                    nodeVal={node => node.val || 8}
+                    nodeLabel="label"
+                    width={500} // Let it stretch or we can just bind to container
+                    height={600}
+                    nodeColor={node => {
+                      if (currentAction && !currentAction.isGroup && node.id === currentAction.id) return '#e8c973'; // Highlight current action node (Golden)
+                      if (currentAction && currentAction.isGroup && currentAction.items.some(i => i.id === node.id)) return '#e8c973';
+                      return node.agent === 'Claude' ? '#D6A66A' : node.agent === 'Antigravity' ? '#7A8C9E' : '#B8CDCD';
+                    }}
+                    linkColor={() => 'rgba(150, 150, 150, 0.3)'}
+                    onEngineStop={() => {
+                      if (graphRef.current) {
+                        graphRef.current.zoomToFit(400, 20);
+                      }
+                    }}
+                  />
+                </div>
+              )}
+              </>
             )}
           </div>
         </div>
