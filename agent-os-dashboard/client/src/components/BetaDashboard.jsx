@@ -850,7 +850,7 @@ export default function BetaDashboard({ onNavigateToSession }) {
                   </div>
                 ) : (
                   /* Full Width Graph Map Panel */
-                  <div style={{ width: '100%', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', background: 'var(--bg-surface)', overflow: 'hidden', height: '600px' }}>
+                  <div style={{ position: 'relative', width: '100%', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', background: 'var(--bg-surface)', overflow: 'hidden', height: '600px' }}>
                     <OrganicGraph 
                       data={graphData} 
                       highlightNodeIds={currentAction?.isGroup ? currentAction.items.map(i => i.id) : [currentAction?.id]}
