@@ -134,6 +134,25 @@ app.get('/api/active-sessions', (req, res) => {
     res.json(getActiveSessions());
 });
 
+app.post('/api/open-folder', (req, res) => {
+    const { path: dirPath } = req.body;
+    if (!dirPath || !fs.existsSync(dirPath)) {
+        return res.status(400).json({ error: 'Invalid or missing directory path' });
+    }
+    
+    // Open the folder natively based on OS
+    const command = os.platform() === 'win32' ? 'start ""' : (os.platform() === 'darwin' ? 'open' : 'xdg-open');
+    const { exec } = require('child_process');
+    
+    exec(`${command} "${dirPath}"`, (error) => {
+        if (error) {
+            console.error('[Server] Failed to open folder:', error);
+            return res.status(500).json({ error: 'Failed to open folder' });
+        }
+        res.json({ status: 'ok', message: 'Folder opened successfully' });
+    });
+});
+
 app.get('/api/sessions', (req, res) => {
     const { entities, index } = store.load();
     const sessions = (index.sessions || [])

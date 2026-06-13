@@ -412,6 +412,16 @@ export default function BetaDashboard({ onNavigateToSession }) {
       .catch(() => setIsLiveSyncing(false));
   };
 
+  const handleOpenFolder = (e, projPath) => {
+    e.stopPropagation();
+    if (!projPath) return;
+    fetch(`${API}/open-folder`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: projPath })
+    }).catch(err => console.error('Failed to open folder', err));
+  };
+
   return (
     <div className="zen-dashboard">
       
@@ -530,10 +540,27 @@ export default function BetaDashboard({ onNavigateToSession }) {
             <div className="zen-project-list">
               {(overview?.projects || []).map(proj => (
                 <div key={proj.name} className="zen-project-card" onClick={() => handleProjectSelect(proj)}>
-                  <div>
-                    <div className="zen-project-name">
+                  <div style={{ flex: 1, minWidth: 0, paddingRight: '1rem' }}>
+                    <div className="zen-project-name" title={proj.name}>
                       {proj.hasActive && <span className="zen-active-badge" title="Active session running"></span>}
-                      {proj.name}
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{proj.name}</span>
+                      
+                      {/* Determine an actual path for the project: try worktrees first */}
+                      {(proj.worktrees && proj.worktrees.length > 0 && proj.worktrees[0].baseRepo) && (
+                        <button 
+                          className="zen-open-folder-btn" 
+                          onClick={(e) => handleOpenFolder(e, proj.worktrees[0].baseRepo)}
+                          title="Open in File Explorer"
+                        >
+                          📂
+                        </button>
+                      )}
+                    </div>
+                    
+                    <div className="zen-agent-indicator">
+                      {proj.agents.claude && <><span className="zen-agent-dot claude" title="Claude Code"></span> {proj.agents.claude.sessions.length}</>}
+                      {proj.agents.claude && proj.agents.antigravity && <span style={{ opacity: 0.3 }}>|</span>}
+                      {proj.agents.antigravity && <><span className="zen-agent-dot antigravity" title="Antigravity IDE"></span> {proj.agents.antigravity.sessions.length}</>}
                     </div>
                     <div className="zen-project-meta" style={{ marginTop: '0.5rem' }}>
                       <span>{proj.totalSessions} Sessions</span>

@@ -676,3 +676,54 @@
   margin-bottom: 0.4rem;
   font-family: 'Fira Code', monospace;
 }
+
+/* Phase 1 Project Card Styling */
+.zen-project-name {
+  font-family: 'Fira Code', monospace;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 250px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.zen-open-folder-btn {
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-tertiary);
+  font-size: 0.8rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.zen-open-folder-btn:hover {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border-color: var(--text-secondary);
+}
+
+.zen-agent-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  margin-top: 0.5rem;
+}
+.zen-agent-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.zen-agent-dot.claude {
+  background-color: var(--golden);
+}
+.zen-agent-dot.antigravity {
+  background-color: var(--slate);
+}
