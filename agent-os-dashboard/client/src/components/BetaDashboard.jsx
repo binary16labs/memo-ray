@@ -399,28 +399,6 @@ export default function BetaDashboard({ onNavigateToSession }) {
           Live Sync
         </div>
       </div>
-        
-        {selectedProject && (
-          <>
-            <span className="zen-breadcrumb-separator">/</span>
-            <div 
-              className={`zen-breadcrumb-segment ${phase === 'sessions' ? 'active' : ''}`}
-              onClick={() => { setPhase('sessions'); setSelectedSession(null); }}
-            >
-              {selectedProject.name}
-            </div>
-          </>
-        )}
-        
-        {selectedSession && (
-          <>
-            <span className="zen-breadcrumb-separator">/</span>
-            <div className={`zen-breadcrumb-segment ${phase === 'step-through' ? 'active' : ''}`}>
-              {selectedSession.title || 'Session'}
-            </div>
-          </>
-        )}
-      </div>
 
       {/* PHASE 1: Project Selection */}
       {phase === 'projects' && (
