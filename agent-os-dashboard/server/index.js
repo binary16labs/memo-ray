@@ -7,7 +7,7 @@ const { execFile } = require('child_process');
 const si = require('systeminformation');
 
 // Load central configuration contract
-const config = require('../memoray.config.js');
+const config = require('../../memoray.config.js');
 
 const { syncClaude, getActiveSessions } = require('./parsers/claudeParser');
 const { syncAntigravity } = require('./parsers/antigravityParser');

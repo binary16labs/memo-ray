@@ -5,7 +5,7 @@ const readline = require('readline');
 const crypto = require('crypto');
 
 // Load central configuration contract
-const config = require('../../memoray.config.js');
+const config = require('../../../memoray.config.js');
 
 // Override with MEMORAY_ANTIGRAVITY_DIR for non-standard installs or fixtures
 const ANTIGRAVITY_DIRS = process.env.MEMORAY_ANTIGRAVITY_DIR 

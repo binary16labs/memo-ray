@@ -5,7 +5,7 @@ const readline = require('readline');
 const crypto = require('crypto');
 
 // Load central configuration contract
-const config = require('../../memoray.config.js');
+const config = require('../../../memoray.config.js');
 
 // Active Claude Code sessions directory
 const CLAUDE_SESSIONS_DIR = config.CLAUDE_SESSIONS_DIR;
