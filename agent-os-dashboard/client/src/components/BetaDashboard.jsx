@@ -850,6 +850,7 @@ export default function BetaDashboard({ onNavigateToSession, pendingTeleport, on
             flexDirection: 'column', 
             width: '100%', 
             flex: 1, 
+            height: showGraph ? '100%' : 'auto',
             minHeight: 0, 
             boxSizing: 'border-box',
             overflow: showGraph ? 'hidden' : 'auto',
@@ -864,8 +865,9 @@ export default function BetaDashboard({ onNavigateToSession, pendingTeleport, on
               <div style={{ 
                 position: 'relative', 
                 width: '100%', 
-                flex: showGraph ? '1 1 100%' : '1 0 auto', 
-                minHeight: showGraph ? '100%' : 0, 
+                flex: 1, 
+                height: showGraph ? '100%' : 'auto', 
+                minHeight: showGraph ? '600px' : 0,
                 display: 'flex',
                 justifyContent: 'center'
               }}>
