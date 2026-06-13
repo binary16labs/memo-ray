@@ -788,87 +788,87 @@ export default function BetaDashboard({ onNavigateToSession }) {
             </div>
           </div>
 
-          <div className="zen-step-content" style={{ display: 'flex', flexDirection: 'row', gap: '2rem', padding: '2rem', width: '100%', boxSizing: 'border-box' }}>
+          <div className="zen-step-content" style={{ display: 'flex', flexDirection: 'column', width: '100%', boxSizing: 'border-box' }}>
             {loading ? (
               <div className="zen-title">Loading timeline...</div>
             ) : timeline.length === 0 ? (
               <div className="zen-title">No actions found for this session.</div>
             ) : (
               <>
-                {/* Content Panel */}
-                <div className="zen-action-card" style={{ flex: 1, minWidth: '50%' }}>
-                <div className="zen-action-hero">
-                  {getActionHeroText(currentAction)}
-                </div>
-                
-                <div className="zen-action-meta">
-                  <span className={`zen-action-agent ${currentAction.agent?.toLowerCase()}`}>
-                    {currentAction.agent}
-                  </span>
-                  <span>{new Date(currentAction.timestamp).toLocaleTimeString()}</span>
-                  {currentAction.fileName && (
-                    <span>📄 {currentAction.fileName}</span>
-                  )}
-                  {currentAction.toolName && (
-                    <span>🔧 {currentAction.toolName}</span>
-                  )}
-                  
-                  {/* The Why Button */}
-                  {!currentAction.isGroup && (
-                    <button className="zen-toggle-btn" onClick={() => setShowWhy(!showWhy)}>
-                      {showWhy ? 'Hide Intent' : '🤔 Why?'}
-                    </button>
-                  )}
-                </div>
+                {!showGraph ? (
+                  /* Content Panel */
+                  <div className="zen-action-card" style={{ width: '100%' }}>
+                    <div className="zen-action-hero">
+                      {getActionHeroText(currentAction)}
+                    </div>
+                    
+                    <div className="zen-action-meta">
+                      <span className={`zen-action-agent ${currentAction.agent?.toLowerCase()}`}>
+                        {currentAction.agent}
+                      </span>
+                      <span>{new Date(currentAction.timestamp).toLocaleTimeString()}</span>
+                      {currentAction.fileName && (
+                        <span>📄 {currentAction.fileName}</span>
+                      )}
+                      {currentAction.toolName && (
+                        <span>🔧 {currentAction.toolName}</span>
+                      )}
+                      
+                      {/* The Why Button */}
+                      {!currentAction.isGroup && (
+                        <button className="zen-toggle-btn" onClick={() => setShowWhy(!showWhy)}>
+                          {showWhy ? 'Hide Intent' : '🤔 Why?'}
+                        </button>
+                      )}
+                    </div>
 
-                {showWhy && (
-                  <div className="zen-why-box">
-                    <strong>Intent:</strong> {whyText}
+                    {showWhy && (
+                      <div className="zen-why-box">
+                        <strong>Intent:</strong> {whyText}
+                      </div>
+                    )}
+
+                    {/* Content Viewer (Raw, Diff, or Group Info) */}
+                    <div className="zen-file-viewer">
+                      {currentAction.isGroup ? (
+                        <div style={{ color: 'var(--text-tertiary)', textAlign: 'center' }}>
+                          <p>Grouped {currentAction.items.length} read operations to reduce noise.</p>
+                          <p style={{ fontSize: '0.9em', marginTop: '1rem' }}>
+                            Includes: {Array.from(new Set(currentAction.items.map(i => i.toolName))).join(', ')}
+                          </p>
+                        </div>
+                      ) : (
+                        currentAction.toolName === 'replace_file_content' || currentAction.toolName === 'multi_replace_file_content' ? (
+                          renderDiff(fullEntity?.content || '')
+                        ) : (
+                          <pre>
+                            {fullEntity?.content || currentAction.contentSnippet || '(Loading content...)'}
+                          </pre>
+                        )
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  /* Full Width Graph Map Panel */
+                  <div style={{ width: '100%', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', background: 'var(--bg-surface)', overflow: 'hidden', height: '600px' }}>
+                    <OrganicGraph 
+                      data={graphData} 
+                      highlightNodeIds={currentAction?.isGroup ? currentAction.items.map(i => i.id) : [currentAction?.id]}
+                      onNodeClick={(node) => {
+                        // Attempt to find this node in the timeline
+                        const index = timeline.findIndex(step => {
+                          if (step.isGroup) {
+                            return step.items.some(i => i.id === node.id);
+                          }
+                          return step.id === node.id;
+                        });
+                        if (index !== -1) {
+                          setCurrentStepIndex(index);
+                        }
+                      }}
+                    />
                   </div>
                 )}
-
-                {/* Content Viewer (Raw, Diff, or Group Info) */}
-                <div className="zen-file-viewer">
-                  {currentAction.isGroup ? (
-                    <div style={{ color: 'var(--text-tertiary)', textAlign: 'center' }}>
-                      <p>Grouped {currentAction.items.length} read operations to reduce noise.</p>
-                      <p style={{ fontSize: '0.9em', marginTop: '1rem' }}>
-                        Includes: {Array.from(new Set(currentAction.items.map(i => i.toolName))).join(', ')}
-                      </p>
-                    </div>
-                  ) : (
-                    currentAction.toolName === 'replace_file_content' || currentAction.toolName === 'multi_replace_file_content' ? (
-                      renderDiff(fullEntity?.content || '')
-                    ) : (
-                      <pre>
-                        {fullEntity?.content || currentAction.contentSnippet || '(Loading content...)'}
-                      </pre>
-                    )
-                  )}
-                </div>
-              </div>
-              
-              {/* Optional Graph Map Panel */}
-              {showGraph && graphData.nodes.length > 0 && (
-                <div style={{ flex: 1, border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', background: 'var(--bg-surface)', overflow: 'hidden', height: '600px' }}>
-                  <OrganicGraph 
-                    data={graphData} 
-                    highlightNodeIds={currentAction?.isGroup ? currentAction.items.map(i => i.id) : [currentAction?.id]}
-                    onNodeClick={(node) => {
-                      // Attempt to find this node in the timeline
-                      const index = timeline.findIndex(step => {
-                        if (step.isGroup) {
-                          return step.items.some(i => i.id === node.id);
-                        }
-                        return step.id === node.id;
-                      });
-                      if (index !== -1) {
-                        setCurrentStepIndex(index);
-                      }
-                    }}
-                  />
-                </div>
-              )}
               </>
             )}
           </div>
