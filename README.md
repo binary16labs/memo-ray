@@ -22,19 +22,37 @@ The file-interaction timeline is the natural enrichment seam: Memo-Ray already m
 
 ## Quickstart
 
+You can start the full stack (backend and client) with a single command from the project root.
+
+### The Easy Way
+
+```bash
+# Installs dependencies if missing, checks ports, and boots both server + client
+npm run dev
+```
+
+Alternatively, you can run the native launchers directly:
+- **Windows (PowerShell)**: `.\scripts\dev.ps1`
+- **macOS/Linux (Bash)**: `./scripts/dev.sh`
+
+*Note: If port 3001 is already occupied (e.g., because you started the Memo-Ray server through `prime-silo`'s dev launcher), the scripts will automatically detect it, skip booting a duplicate server, and only run the client.*
+
+### The Manual Way
+
+If you prefer to run them in separate terminals:
 ```bash
 # Server (Express, :3001) — syncs agent logs on boot, then on demand
 cd agent-os-dashboard/server
 npm install
 node index.js
 
-# Client (Vite + React, :5173)
+# Client (Vite + React, :5175)
 cd ../client
 npm install
 npm run dev
 ```
 
-Open http://localhost:5173. The left sidebar lists sessions (and a Files explorer); clicking one sprouts its lineage graph; the right sidebar inspects any node.
+Open http://localhost:5175. The left sidebar lists sessions (and a Files explorer); clicking one sprouts its lineage graph; the right sidebar inspects any node.
 
 ## Configuration
 

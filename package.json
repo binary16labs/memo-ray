@@ -1,0 +1,9 @@
+{
+  "name": "memo-ray-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Start script launcher for Memo-Ray",
+  "scripts": {
+    "dev": "node scripts/dev.js"
+  }
+}
