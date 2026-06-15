@@ -9,16 +9,23 @@ export default function AgentLifelog({ onTeleport }) {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetch(`${API}/lifelog`)
-            .then(res => res.json())
-            .then(data => {
-                setLifelog(data);
-                setLoading(false);
-            })
-            .catch(err => {
-                console.error(err);
-                setLoading(false);
-            });
+        const loadLifelog = () => {
+            fetch(`${API}/lifelog`)
+                .then(res => res.json())
+                .then(data => {
+                    setLifelog(data);
+                    setLoading(false);
+                })
+                .catch(err => {
+                    console.error(err);
+                    setLoading(false);
+                });
+        };
+
+        loadLifelog();
+
+        const interval = setInterval(loadLifelog, 10000);
+        return () => clearInterval(interval);
     }, []);
 
     if (loading) {

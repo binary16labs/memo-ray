@@ -52,7 +52,10 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(ENTITIES_DIR)) fs.mkdirSync(ENTITIES_DIR, { recursive: true });
 
 // Boot Sync
+let isSyncing = false;
 async function performSync() {
+    if (isSyncing) return;
+    isSyncing = true;
     try {
         await syncClaude();
         await syncAntigravity();
@@ -60,6 +63,8 @@ async function performSync() {
         console.log('[Server] Delta sync completed successfully.');
     } catch (e) {
         console.error('[Server] Delta sync failed:', e);
+    } finally {
+        isSyncing = false;
     }
 }
 
@@ -1171,6 +1176,7 @@ function openDefaultBrowser(url) {
 }
 
 let serverInstance = null;
+let syncInterval = null;
 
 function startServer(portOverride = null) {
     if (serverInstance) return;
@@ -1186,12 +1192,19 @@ function startServer(portOverride = null) {
         }
 
         await performSync();
+
+        // Background sync every 30 seconds
+        syncInterval = setInterval(performSync, 30000);
     });
     return serverInstance;
 }
 
 function stopServer() {
     if (serverInstance) {
+        if (syncInterval) {
+            clearInterval(syncInterval);
+            syncInterval = null;
+        }
         serverInstance.close();
         serverInstance = null;
         console.log('[Server] Memo-Ray stopped.');

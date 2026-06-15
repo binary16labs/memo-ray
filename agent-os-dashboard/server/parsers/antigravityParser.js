@@ -24,8 +24,10 @@ function saveIndex(index) {
     fs.writeFileSync(INDEX_FILE, JSON.stringify(index, null, 2));
 }
 
-function saveEntity(entity) {
-    fs.writeFileSync(path.join(ENTITIES_DIR, `${entity.id}.json`), JSON.stringify(entity, null, 2));
+function saveEntity(entity, overwrite = false) {
+    const file = path.join(ENTITIES_DIR, `${entity.id}.json`);
+    if (!overwrite && fs.existsSync(file)) return;
+    fs.writeFileSync(file, JSON.stringify(entity, null, 2));
 }
 
 function hash(str) {
@@ -40,7 +42,7 @@ function updateParentChild(parentId, childId) {
     if (!parent.children_ids) parent.children_ids = [];
     if (!parent.children_ids.includes(childId)) {
         parent.children_ids.push(childId);
-        saveEntity(parent);
+        saveEntity(parent, true); // Force overwrite for parent update
     }
 }
 
@@ -200,6 +202,8 @@ function parseArtifacts(sessionDir, sessionUUID, lastSyncTime) {
     return count;
 }
 
+const SYNC_BUFFER_MS = 5 * 60 * 1000; // 5 minutes overlap to prevent write buffering race conditions
+
 async function syncAntigravity() {
     console.log('[Antigravity Sync] Starting...');
     const index = loadIndex();
@@ -228,7 +232,7 @@ async function syncAntigravity() {
         if (fs.existsSync(transcriptPath)) {
             try { 
                 tStats = fs.statSync(transcriptPath); 
-                shouldParseTranscript = tStats.mtimeMs > (index.antigravity_last_sync_timestamp || 0);
+                shouldParseTranscript = tStats.mtimeMs > (index.antigravity_last_sync_timestamp || 0) - SYNC_BUFFER_MS;
             } catch { /* skip */ }
         }
 
@@ -249,7 +253,7 @@ async function syncAntigravity() {
                 content: title,
                 metadata: { ...existingSession.metadata, sessionPath },
                 parent_id: null, children_ids: existingSession.children_ids || []
-            });
+            }, true); // Force overwrite for session initialization
 
             if (isNew) {
                 index.sessions.push(sessionUUID);
@@ -268,12 +272,12 @@ async function syncAntigravity() {
                 const sessionEntity = JSON.parse(fs.readFileSync(sessionFile, 'utf-8'));
                 if (result.projectName) sessionEntity.metadata.project = result.projectName;
                 if (result.tokens) sessionEntity.metadata.tokens = result.tokens;
-                saveEntity(sessionEntity);
+                saveEntity(sessionEntity, true); // Force overwrite for session updates
             }
         }
 
         // Parse artifacts
-        totalArtifacts += parseArtifacts(sessionPath, sessionUUID, (index.antigravity_last_sync_timestamp || 0));
+        totalArtifacts += parseArtifacts(sessionPath, sessionUUID, (index.antigravity_last_sync_timestamp || 0) - SYNC_BUFFER_MS);
         }
     }
 

@@ -32,8 +32,10 @@ function saveIndex(index) {
     fs.writeFileSync(INDEX_FILE, JSON.stringify(index, null, 2));
 }
 
-function saveEntity(entity) {
-    fs.writeFileSync(path.join(ENTITIES_DIR, `${entity.id}.json`), JSON.stringify(entity, null, 2));
+function saveEntity(entity, overwrite = false) {
+    const file = path.join(ENTITIES_DIR, `${entity.id}.json`);
+    if (!overwrite && fs.existsSync(file)) return;
+    fs.writeFileSync(file, JSON.stringify(entity, null, 2));
 }
 
 function hash(str) {
@@ -48,7 +50,7 @@ function updateParentChild(parentId, childId) {
     if (!parent.children_ids) parent.children_ids = [];
     if (!parent.children_ids.includes(childId)) {
         parent.children_ids.push(childId);
-        saveEntity(parent);
+        saveEntity(parent, true); // Force overwrite for parent update
     }
 }
 
@@ -278,6 +280,8 @@ function findAuditFiles(dir, filesList = []) {
     return filesList;
 }
 
+const SYNC_BUFFER_MS = 5 * 60 * 1000; // 5 minutes overlap to prevent write buffering race conditions
+
 async function syncClaude() {
     console.log('[Claude Sync] Starting...');
     const index = loadIndex();
@@ -289,12 +293,12 @@ async function syncClaude() {
         for (const file of auditFiles) {
             let stats;
             try { stats = fs.statSync(file); } catch { continue; }
-            if (stats.mtimeMs <= (index.claude_last_sync_timestamp || 0)) continue;
+            if (stats.mtimeMs <= (index.claude_last_sync_timestamp || 0) - SYNC_BUFFER_MS) continue;
 
             // Derive a rough project name from the path — will be refined
             // below with cwd from the parsed entries.
             let projectName = path.basename(path.dirname(path.dirname(file)));
-            const isCliProject = file.toLowerCase().includes('.claude' + path.sep + 'projects');
+            const isSelfProject = file.toLowerCase().includes('.claude' + path.sep + 'projects');
 
             console.log(`[Claude Sync] Parsing: ${path.basename(file)}`);
 
@@ -302,7 +306,7 @@ async function syncClaude() {
             const title = extractSessionTitle(file) || `Session ${path.basename(file, '.jsonl')}`;
 
             let taskType = 'Chat';
-            if (file.includes('claude-code-sessions') || isCliProject) taskType = 'Code';
+            if (file.includes('claude-code-sessions') || isSelfProject) taskType = 'Code';
             else if (file.includes('local-agent-mode-sessions')) taskType = 'Co-work';
 
             // Initialize Session so blocks can attach to it
@@ -312,7 +316,7 @@ async function syncClaude() {
                 content: title,
                 metadata: { filePath: file, project: projectName, tokens: 0, taskType: taskType },
                 parent_id: null, children_ids: []
-            });
+            }, true); // Force overwrite for session initialization
 
             if (!index.sessions.includes(sessionUUID)) {
                 index.sessions.push(sessionUUID);
@@ -341,7 +345,7 @@ async function syncClaude() {
             // Check if this session is currently live
             updatedSession.metadata.isActive = isSessionActive(result.logSessionId);
 
-            saveEntity(updatedSession);
+            saveEntity(updatedSession, true); // Force overwrite for session updates
 
             totalNodes += result.nodesProcessed;
         }

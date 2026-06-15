@@ -38,10 +38,17 @@ export default function UnifiedDashboard({ initialSessionId, onSessionLoaded }) 
 
   // Load sessions
   useEffect(() => {
-    fetch(`${API}/sessions`)
-      .then(r => r.json())
-      .then(data => setSessions(Array.isArray(data) ? data : []))
-      .catch(err => console.error('Session fetch failed:', err));
+    const loadSessions = () => {
+      fetch(`${API}/sessions`)
+        .then(r => r.json())
+        .then(data => setSessions(Array.isArray(data) ? data : []))
+        .catch(err => console.error('Session fetch failed:', err));
+    };
+
+    loadSessions();
+
+    const interval = setInterval(loadSessions, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   // Cross-tab navigation: auto-load session from Beta
@@ -51,6 +58,27 @@ export default function UnifiedDashboard({ initialSessionId, onSessionLoaded }) 
       onSessionLoaded?.();
     }
   }, [initialSessionId]);
+
+  // Poll selected session graph data if selected and active
+  useEffect(() => {
+    if (!selectedSessionId) return;
+
+    // Check if the session is active
+    const sessionObj = sessions.find(s => s.id === selectedSessionId);
+    const isActive = sessionObj?.metadata?.isActive;
+    if (!isActive) return;
+
+    const interval = setInterval(() => {
+      fetch(`${API}/graph/${selectedSessionId}?limit=500`)
+        .then(r => r.json())
+        .then(data => {
+          setSessionData(data);
+        })
+        .catch(err => console.error('Graph poll failed:', err));
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [selectedSessionId, sessions]);
 
   // Load files when switching to files view
   useEffect(() => {
