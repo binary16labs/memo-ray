@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import OrganicGraph from './OrganicGraph';
+import GraphErrorBoundary from './GraphErrorBoundary';
 import OverviewGrid from './OverviewGrid';
 import bennyLogo from '../assets/benny.png';
 
@@ -479,14 +480,16 @@ export default function UnifiedDashboard({ initialSessionId, onSessionLoaded }) 
               </button>
             </div>
 
-            <OrganicGraph
-              data={sessionData}
-              filters={filters}
-              onNodeHover={handleNodeHover}
-              onNodeClick={handleNodeClick}
-              onBackgroundClick={handleBackgroundClick}
-              highlightNodeIds={highlightNodeId ? [highlightNodeId] : []}
-            />
+            <GraphErrorBoundary resetKey={selectedSessionId}>
+              <OrganicGraph
+                data={sessionData}
+                filters={filters}
+                onNodeHover={handleNodeHover}
+                onNodeClick={handleNodeClick}
+                onBackgroundClick={handleBackgroundClick}
+                highlightNodeIds={highlightNodeId ? [highlightNodeId] : []}
+              />
+            </GraphErrorBoundary>
 
             {/* Sequence Scrub Slider */}
             {chronologicalNodes.length > 0 && (

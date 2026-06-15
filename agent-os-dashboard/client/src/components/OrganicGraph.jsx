@@ -121,12 +121,10 @@ export default function OrganicGraph({ data, filters = { showUser: true, showAge
         return [];
     }, [highlightNodeIds, highlightNodeId]);
 
-    // Force canvas redraw when active highlight changes
-    useEffect(() => {
-        if (fgRef.current) {
-            fgRef.current.refresh();
-        }
-    }, [activeHighlightIds]);
+    // Note: changing activeHighlightIds gives paintNode (nodeCanvasObject) a new
+    // identity, which makes ForceGraph2D redraw the canvas on its own. There is no
+    // imperative refresh() method on the react-force-graph-2d ref, so we must not
+    // call one here — doing so throws and unmounts the whole graph.
 
     const paintNode = useCallback((node, ctx, globalScale) => {
         const isHighlighted = activeHighlightIds.includes(node.id);

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import OrganicGraph from './OrganicGraph';
+import GraphErrorBoundary from './GraphErrorBoundary';
 import '../zen.css';
 
 const API = import.meta.env.DEV
@@ -901,23 +902,25 @@ export default function BetaDashboard({ onNavigateToSession, pendingTeleport, on
                 {/* Full Width Graph Map Panel */}
                 {showGraph && graphData.nodes.length > 0 && (
                   <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: 'var(--bg-base)', overflow: 'hidden' }}>
-                    <OrganicGraph 
-                      data={graphData} 
-                      layout={graphLayout}
-                      highlightNodeIds={currentAction?.isGroup ? currentAction.items.map(i => i.id) : [currentAction?.id]}
-                      onNodeClick={(node) => {
-                        // Attempt to find this node in the timeline
-                        const index = timeline.findIndex(step => {
-                          if (step.isGroup) {
-                            return step.items.some(i => i.id === node.id);
+                    <GraphErrorBoundary resetKey={selectedSession?.id}>
+                      <OrganicGraph
+                        data={graphData}
+                        layout={graphLayout}
+                        highlightNodeIds={currentAction?.isGroup ? currentAction.items.map(i => i.id) : [currentAction?.id]}
+                        onNodeClick={(node) => {
+                          // Attempt to find this node in the timeline
+                          const index = timeline.findIndex(step => {
+                            if (step.isGroup) {
+                              return step.items.some(i => i.id === node.id);
+                            }
+                            return step.id === node.id;
+                          });
+                          if (index !== -1) {
+                            setCurrentStepIndex(index);
                           }
-                          return step.id === node.id;
-                        });
-                        if (index !== -1) {
-                          setCurrentStepIndex(index);
-                        }
-                      }}
-                    />
+                        }}
+                      />
+                    </GraphErrorBoundary>
                   </div>
                 )}
               </div>
