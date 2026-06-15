@@ -70,7 +70,7 @@ export default function UnifiedDashboard({ initialSessionId, onSessionLoaded }) 
 
     const interval = setInterval(() => {
       fetch(`${API}/graph/${selectedSessionId}?limit=500`)
-        .then(r => r.json())
+        .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
         .then(data => {
           setSessionData(data);
         })
@@ -122,6 +122,7 @@ export default function UnifiedDashboard({ initialSessionId, onSessionLoaded }) 
     setHighlightNodeId(null); // Reset highlight when changing sessions manually
     try {
       const res = await fetch(`${API}/graph/${sessionId}?limit=500`);
+      if (!res.ok) throw new Error(`Graph fetch failed: ${res.status}`);
       const data = await res.json();
       setSessionData(data);
     } catch (e) {
@@ -149,6 +150,7 @@ export default function UnifiedDashboard({ initialSessionId, onSessionLoaded }) 
       setHighlightNodeId(interaction.nodeId);
       try {
         const res = await fetch(`${API}/graph/${interaction.sessionId}?limit=500`);
+        if (!res.ok) throw new Error(`Graph fetch failed: ${res.status}`);
         const data = await res.json();
         setSessionData(data);
         
@@ -483,7 +485,7 @@ export default function UnifiedDashboard({ initialSessionId, onSessionLoaded }) 
               onNodeHover={handleNodeHover}
               onNodeClick={handleNodeClick}
               onBackgroundClick={handleBackgroundClick}
-              highlightNodeId={highlightNodeId}
+              highlightNodeIds={highlightNodeId ? [highlightNodeId] : []}
             />
 
             {/* Sequence Scrub Slider */}

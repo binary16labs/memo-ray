@@ -13,10 +13,16 @@ const PALETTE = {
   'Error':      '#c47a6a',
 };
 
-export default function OrganicGraph({ data, filters = { showUser: true, showAgent: true, showTools: true, showArtifacts: true }, onNodeHover, onNodeClick, onBackgroundClick, highlightNodeIds = [], layout = 'organic' }) {
+export default function OrganicGraph({ data, filters = { showUser: true, showAgent: true, showTools: true, showArtifacts: true }, onNodeHover, onNodeClick, onBackgroundClick, highlightNodeIds = [], highlightNodeId = null, layout = 'organic' }) {
     const fgRef = useRef();
     const containerRef = useRef();
     const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+
+    const prevSessionIdRef = useRef(null);
+    const prevLayoutRef = useRef(layout);
+    const prevNodesCountRef = useRef(0);
+    const hasSettleZoomedRef = useRef(false);
+    const hasInitializedForces = useRef(false);
 
     // Measure actual container
     useEffect(() => {
@@ -35,6 +41,17 @@ export default function OrganicGraph({ data, filters = { showUser: true, showAge
     useEffect(() => {
         if (!data?.nodes || data.nodes.length === 0) return;
 
+        const sessionNode = data.nodes.find(n => n.type === 'Session');
+        const sessionId = sessionNode ? sessionNode.id : null;
+
+        const sessionChanged = prevSessionIdRef.current !== sessionId;
+        const layoutChanged = prevLayoutRef.current !== layout;
+        const nodesCountChanged = prevNodesCountRef.current !== data.nodes.length;
+
+        prevSessionIdRef.current = sessionId;
+        prevLayoutRef.current = layout;
+        prevNodesCountRef.current = data.nodes.length;
+
         if (layout === 'chronological') {
             // Sort nodes chronologically
             const sortedNodes = [...data.nodes].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
@@ -51,7 +68,7 @@ export default function OrganicGraph({ data, filters = { showUser: true, showAge
                     node.fy = undefined;
                 }
             });
-        } else {
+        } else if (layoutChanged || sessionChanged) {
             // Clear fixed coordinates so the force simulation can arrange organically
             data.nodes.forEach(node => {
                 node.fx = undefined;
@@ -60,10 +77,18 @@ export default function OrganicGraph({ data, filters = { showUser: true, showAge
         }
 
         if (fgRef.current) {
-            fgRef.current.d3ReheatSimulation();
-            setTimeout(() => {
-                if (fgRef.current) fgRef.current.zoomToFit(400, 60);
-            }, 300);
+            // Only reheat simulation if the layout, session, or node count changed
+            if (layoutChanged || sessionChanged || nodesCountChanged) {
+                fgRef.current.d3ReheatSimulation();
+            }
+
+            // Only zoom to fit when the session changes, layout changes, or on initial load
+            if (sessionChanged || layoutChanged || !hasSettleZoomedRef.current) {
+                hasSettleZoomedRef.current = true;
+                setTimeout(() => {
+                    if (fgRef.current) fgRef.current.zoomToFit(400, 60);
+                }, 300);
+            }
         }
     }, [layout, data]);
 
@@ -80,7 +105,7 @@ export default function OrganicGraph({ data, filters = { showUser: true, showAge
         });
         
         const nodeIds = new Set(filteredNodes.map(n => n.id));
-        const filteredLinks = data.links.filter(l => {
+        const filteredLinks = (data.links || []).filter(l => {
             const src = typeof l.source === 'object' ? l.source.id : l.source;
             const tgt = typeof l.target === 'object' ? l.target.id : l.target;
             return nodeIds.has(src) && nodeIds.has(tgt);
@@ -89,8 +114,22 @@ export default function OrganicGraph({ data, filters = { showUser: true, showAge
         return { nodes: filteredNodes, links: filteredLinks };
     }, [data, filters]);
 
+    const activeHighlightIds = useMemo(() => {
+        if (Array.isArray(highlightNodeIds)) return highlightNodeIds;
+        if (highlightNodeIds) return [highlightNodeIds];
+        if (highlightNodeId) return [highlightNodeId];
+        return [];
+    }, [highlightNodeIds, highlightNodeId]);
+
+    // Force canvas redraw when active highlight changes
+    useEffect(() => {
+        if (fgRef.current) {
+            fgRef.current.refresh();
+        }
+    }, [activeHighlightIds]);
+
     const paintNode = useCallback((node, ctx, globalScale) => {
-        const isHighlighted = Array.isArray(highlightNodeIds) ? highlightNodeIds.includes(node.id) : node.id === highlightNodeIds;
+        const isHighlighted = activeHighlightIds.includes(node.id);
         const color = isHighlighted ? '#db533f' : (PALETTE[node.type] || '#5a6a5e'); // Rust red highlight
         const size = (node.val || 6) * (isHighlighted ? 2.2 : 1); // Enlarged when in active scope
         const label = node.label || node.type;
@@ -157,16 +196,13 @@ export default function OrganicGraph({ data, filters = { showUser: true, showAge
             const text = label.length > maxChars ? label.substring(0, maxChars) + '…' : label;
             ctx.fillText(text, node.x, node.y + size + 2);
         }
-    }, [highlightNodeIds]);
+    }, [activeHighlightIds]);
 
     useEffect(() => {
-        if (fgRef.current && graphData.nodes.length > 0) {
-            fgRef.current.d3Force('charge').strength(-300);
-            fgRef.current.d3Force('link').distance(50);
-            // Zoom to fit after initial settle
-            setTimeout(() => {
-                if (fgRef.current) fgRef.current.zoomToFit(400, 60);
-            }, 500);
+        if (fgRef.current && graphData.nodes.length > 0 && !hasInitializedForces.current) {
+            hasInitializedForces.current = true;
+            fgRef.current.d3Force('charge')?.strength(-300);
+            fgRef.current.d3Force('link')?.distance(50);
         }
     }, [graphData]);
 
@@ -190,8 +226,8 @@ export default function OrganicGraph({ data, filters = { showUser: true, showAge
                 linkColor={link => {
                     const srcId = typeof link.source === 'object' ? link.source.id : link.source;
                     const tgtId = typeof link.target === 'object' ? link.target.id : link.target;
-                    const isSourceHighlighted = Array.isArray(highlightNodeIds) ? highlightNodeIds.includes(srcId) : srcId === highlightNodeIds;
-                    const isTargetHighlighted = Array.isArray(highlightNodeIds) ? highlightNodeIds.includes(tgtId) : tgtId === highlightNodeIds;
+                    const isSourceHighlighted = activeHighlightIds.includes(srcId);
+                    const isTargetHighlighted = activeHighlightIds.includes(tgtId);
                     if (isSourceHighlighted && isTargetHighlighted) {
                         return 'rgba(219, 83, 63, 0.95)'; // bright rust red between active nodes
                     }
@@ -203,36 +239,36 @@ export default function OrganicGraph({ data, filters = { showUser: true, showAge
                 linkWidth={link => {
                     const srcId = typeof link.source === 'object' ? link.source.id : link.source;
                     const tgtId = typeof link.target === 'object' ? link.target.id : link.target;
-                    const isSourceHighlighted = Array.isArray(highlightNodeIds) ? highlightNodeIds.includes(srcId) : srcId === highlightNodeIds;
-                    const isTargetHighlighted = Array.isArray(highlightNodeIds) ? highlightNodeIds.includes(tgtId) : tgtId === highlightNodeIds;
+                    const isSourceHighlighted = activeHighlightIds.includes(srcId);
+                    const isTargetHighlighted = activeHighlightIds.includes(tgtId);
                     return (isSourceHighlighted || isTargetHighlighted) ? 3 : 1;
                 }}
                 linkDirectionalParticles={link => {
                     const srcId = typeof link.source === 'object' ? link.source.id : link.source;
                     const tgtId = typeof link.target === 'object' ? link.target.id : link.target;
-                    const isSourceHighlighted = Array.isArray(highlightNodeIds) ? highlightNodeIds.includes(srcId) : srcId === highlightNodeIds;
-                    const isTargetHighlighted = Array.isArray(highlightNodeIds) ? highlightNodeIds.includes(tgtId) : tgtId === highlightNodeIds;
+                    const isSourceHighlighted = activeHighlightIds.includes(srcId);
+                    const isTargetHighlighted = activeHighlightIds.includes(tgtId);
                     return (isSourceHighlighted || isTargetHighlighted) ? 4 : 1;
                 }}
                 linkDirectionalParticleWidth={link => {
                     const srcId = typeof link.source === 'object' ? link.source.id : link.source;
                     const tgtId = typeof link.target === 'object' ? link.target.id : link.target;
-                    const isSourceHighlighted = Array.isArray(highlightNodeIds) ? highlightNodeIds.includes(srcId) : srcId === highlightNodeIds;
-                    const isTargetHighlighted = Array.isArray(highlightNodeIds) ? highlightNodeIds.includes(tgtId) : tgtId === highlightNodeIds;
+                    const isSourceHighlighted = activeHighlightIds.includes(srcId);
+                    const isTargetHighlighted = activeHighlightIds.includes(tgtId);
                     return (isSourceHighlighted || isTargetHighlighted) ? 4 : 2;
                 }}
                 linkDirectionalParticleSpeed={link => {
                     const srcId = typeof link.source === 'object' ? link.source.id : link.source;
                     const tgtId = typeof link.target === 'object' ? link.target.id : link.target;
-                    const isSourceHighlighted = Array.isArray(highlightNodeIds) ? highlightNodeIds.includes(srcId) : srcId === highlightNodeIds;
-                    const isTargetHighlighted = Array.isArray(highlightNodeIds) ? highlightNodeIds.includes(tgtId) : tgtId === highlightNodeIds;
+                    const isSourceHighlighted = activeHighlightIds.includes(srcId);
+                    const isTargetHighlighted = activeHighlightIds.includes(tgtId);
                     return (isSourceHighlighted || isTargetHighlighted) ? 0.015 : 0.004;
                 }}
                 linkDirectionalParticleColor={link => {
                     const srcId = typeof link.source === 'object' ? link.source.id : link.source;
                     const tgtId = typeof link.target === 'object' ? link.target.id : link.target;
-                    const isSourceHighlighted = Array.isArray(highlightNodeIds) ? highlightNodeIds.includes(srcId) : srcId === highlightNodeIds;
-                    const isTargetHighlighted = Array.isArray(highlightNodeIds) ? highlightNodeIds.includes(tgtId) : tgtId === highlightNodeIds;
+                    const isSourceHighlighted = activeHighlightIds.includes(srcId);
+                    const isTargetHighlighted = activeHighlightIds.includes(tgtId);
                     return (isSourceHighlighted || isTargetHighlighted) ? 'rgba(219, 83, 63, 0.85)' : 'rgba(139,156,139,0.5)';
                 }}
                 d3VelocityDecay={0.25}

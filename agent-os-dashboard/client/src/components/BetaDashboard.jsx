@@ -222,7 +222,7 @@ export default function BetaDashboard({ onNavigateToSession, pendingTeleport, on
           // Apply smart grouping
           const grouped = groupTimeline(sessionActions);
           setTimeline(grouped);
-          setGraphData(graphData || { nodes: [], links: [] });
+          setGraphData(graphData ? { nodes: graphData.nodes || [], links: graphData.links || [] } : { nodes: [], links: [] });
           
           if (targetNodeRef.current) {
             const index = grouped.findIndex(step => step.id === targetNodeRef.current || step.nodeId === targetNodeRef.current || (step.items && step.items.some(n => n.id === targetNodeRef.current)));
@@ -392,7 +392,7 @@ export default function BetaDashboard({ onNavigateToSession, pendingTeleport, on
       }
 
       targetNodeRef.current = nodeId;
-      setSelectedProject(project);
+      setSelectedProject(projData || { name: project, agents: { claude: { sessions: [] }, antigravity: { sessions: [] } } });
       setSelectedSession(sessionObj);
       setIsPlaying(false);
       setPhase('step-through');
