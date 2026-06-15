@@ -335,7 +335,7 @@ app.get('/api/lifelog', async (req, res) => {
     // Fetch Git Commits from all unique workspace paths
     const gitPromises = Array.from(uniqueWorkspaces.entries()).map(async ([wsPath, projName]) => {
         try {
-            const { stdout } = await execFileAsync('git', ['log', '-n', '50', '--pretty=format:%H|%an|%at|%s'], { cwd: wsPath, timeout: 5000 });
+            const { stdout } = await execFileAsync('git', ['log', '-n', '50', '--pretty=format:%H|%an|%at|%s'], { cwd: wsPath, timeout: 5000, windowsHide: true });
             if (stdout) {
                 const lines = stdout.split('\n');
                 lines.forEach(line => {
@@ -1161,7 +1161,7 @@ function openBrowser(url) {
 
 function openDefaultBrowser(url) {
     if (process.platform === 'win32') {
-        execFile('cmd.exe', ['/c', 'start', '', url], (err) => {
+        execFile('cmd.exe', ['/c', 'start', '', url], { windowsHide: true }, (err) => {
             if (err) console.error('[Server] Failed to open browser:', err);
         });
     } else if (process.platform === 'darwin') {
