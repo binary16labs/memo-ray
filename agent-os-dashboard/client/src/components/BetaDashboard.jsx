@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import OrganicGraph from './OrganicGraph';
 import GraphErrorBoundary from './GraphErrorBoundary';
 import '../zen.css';
@@ -160,6 +160,8 @@ export default function BetaDashboard({ onNavigateToSession, pendingTeleport, on
   const [showGraph, setShowGraph] = useState(false);
   const [graphData, setGraphData] = useState({ nodes: [], links: [] });
   const [graphLayout, setGraphLayout] = useState('organic');
+  const [trackingMode, setTrackingMode] = useState(true); // camera follows current node vs free roam
+  const [graphLocked, setGraphLocked] = useState(true);   // freeze node positions (anti-jitter)
   const graphRef = useRef();
 
   // Features state
@@ -211,8 +213,12 @@ export default function BetaDashboard({ onNavigateToSession, pendingTeleport, on
     if (phase === 'step-through' && selectedSession) {
       setLoading(true);
       Promise.all([
-        fetch(`${API}/beta/timeline?limit=2000&project=${encodeURIComponent(selectedSession.project)}`).then(r => r.json()),
-        fetch(`${API}/graph/${selectedSession.id}`).then(r => r.json())
+        // Load the session's COMPLETE action list and the COMPLETE node graph —
+        // nothing is capped, so every step is auditable and every step has a
+        // matching graph node for the trace. Rendering is bounded by the graph
+        // lock (frozen layout) + minimap rather than by dropping data.
+        fetch(`${API}/beta/timeline?session=${selectedSession.id}&limit=100000`).then(r => r.json()),
+        fetch(`${API}/graph/${selectedSession.id}?limit=100000`).then(r => r.json())
       ])
         .then(([timelineData, graphData]) => {
           // Filter to this session, reverse for chronological order
@@ -223,7 +229,11 @@ export default function BetaDashboard({ onNavigateToSession, pendingTeleport, on
           // Apply smart grouping
           const grouped = groupTimeline(sessionActions);
           setTimeline(grouped);
-          setGraphData(graphData ? { nodes: graphData.nodes || [], links: graphData.links || [] } : { nodes: [], links: [] });
+          const normalizedGraph = graphData ? { nodes: graphData.nodes || [], links: graphData.links || [] } : { nodes: [], links: [] };
+          setGraphData(normalizedGraph);
+          // Large sessions are rendered with the windowed/deterministic strategy
+          // inside OrganicGraph (only a slice around the current step is drawn, all
+          // nodes stay auditable + shown in the minimap). No layout change needed.
           
           if (targetNodeRef.current) {
             const index = grouped.findIndex(step => step.id === targetNodeRef.current || step.nodeId === targetNodeRef.current || (step.items && step.items.some(n => n.id === targetNodeRef.current)));
@@ -401,7 +411,33 @@ export default function BetaDashboard({ onNavigateToSession, pendingTeleport, on
     }
   }, [pendingTeleport, overview, onTeleportConsumed]);
 
-
+  // Downsample the milestone scrubber so a multi-thousand-step session doesn't
+  // render thousands of DOM nodes. The full timeline is still fully navigable
+  // (arrows/play/graph); each bar segment maps to a slice and jumps to its start.
+  // NOTE: must stay above the early return below to keep hook order stable.
+  const MAX_BAR_SEGMENTS = 600;
+  const milestoneSegments = useMemo(() => {
+    const n = timeline.length;
+    if (n === 0) return [];
+    if (n <= MAX_BAR_SEGMENTS) {
+      return timeline.map((act, idx) => ({
+        idx, end: idx,
+        milestone: isMilestone(act),
+        title: isMilestone(act) ? getActionHeroText(act) : ''
+      }));
+    }
+    const segs = [];
+    for (let b = 0; b < MAX_BAR_SEGMENTS; b++) {
+      const start = Math.floor((b * n) / MAX_BAR_SEGMENTS);
+      const end = Math.floor(((b + 1) * n) / MAX_BAR_SEGMENTS);
+      let milestone = false, title = '';
+      for (let i = start; i < end; i++) {
+        if (isMilestone(timeline[i])) { milestone = true; title = getActionHeroText(timeline[i]); break; }
+      }
+      segs.push({ idx: start, end: Math.max(start, end - 1), milestone, title });
+    }
+    return segs;
+  }, [timeline]);
 
   if (loading && phase === 'projects') {
     return (
@@ -740,12 +776,30 @@ export default function BetaDashboard({ onNavigateToSession, pendingTeleport, on
                   {showGraph ? '🗺️ Hide Map' : '🗺️ Show Map'}
                 </button>
                 {showGraph && (
-                  <button 
-                    className="zen-toggle-btn active" 
+                  <button
+                    className="zen-toggle-btn active"
                     onClick={() => setGraphLayout(graphLayout === 'organic' ? 'chronological' : 'organic')}
                     style={{ borderColor: 'var(--taupe)', color: 'var(--taupe)' }}
                   >
                     {graphLayout === 'organic' ? '🧬 Organic View' : '⏳ Layered Timeline'}
+                  </button>
+                )}
+                {showGraph && (
+                  <button
+                    className={`zen-toggle-btn ${trackingMode ? 'active' : ''}`}
+                    onClick={() => setTrackingMode(t => !t)}
+                    title={trackingMode ? 'Camera follows the current step (map shown)' : 'Free roam — pan/zoom freely for cinematic shots'}
+                  >
+                    {trackingMode ? '🎥 Tracking' : '🕊️ Free Roam'}
+                  </button>
+                )}
+                {showGraph && (
+                  <button
+                    className={`zen-toggle-btn ${graphLocked ? 'active' : ''}`}
+                    onClick={() => setGraphLocked(l => !l)}
+                    title={graphLocked ? 'Graph frozen — nodes stay put' : 'Graph live — force layout active'}
+                  >
+                    {graphLocked ? '🔒 Locked' : '🔓 Live'}
                   </button>
                 )}
                 <div className="zen-step-progress">
@@ -785,18 +839,17 @@ export default function BetaDashboard({ onNavigateToSession, pendingTeleport, on
               </div>
             </div>
 
-            {/* Milestones Bar */}
+            {/* Milestones Bar (downsampled for very long sessions) */}
             <div className="zen-milestones-bar">
-              {timeline.map((act, idx) => {
-                const milestone = isMilestone(act);
-                const past = idx <= currentStepIndex;
-                const active = idx === currentStepIndex;
+              {milestoneSegments.map((seg) => {
+                const past = currentStepIndex >= seg.idx;
+                const active = currentStepIndex >= seg.idx && currentStepIndex <= seg.end;
                 return (
-                  <div 
-                    key={act.id} 
-                    onClick={() => setCurrentStepIndex(idx)}
-                    className={`zen-milestone-segment ${milestone ? 'is-milestone' : ''} ${past ? 'past' : ''} ${active ? 'active' : ''}`}
-                    title={milestone ? getActionHeroText(act) : ''}
+                  <div
+                    key={seg.idx}
+                    onClick={() => setCurrentStepIndex(seg.idx)}
+                    className={`zen-milestone-segment ${seg.milestone ? 'is-milestone' : ''} ${past ? 'past' : ''} ${active ? 'active' : ''}`}
+                    title={seg.title}
                   />
                 );
               })}
@@ -906,6 +959,8 @@ export default function BetaDashboard({ onNavigateToSession, pendingTeleport, on
                       <OrganicGraph
                         data={graphData}
                         layout={graphLayout}
+                        trackingMode={trackingMode}
+                        locked={graphLocked}
                         highlightNodeIds={currentAction?.isGroup ? currentAction.items.map(i => i.id) : [currentAction?.id]}
                         onNodeClick={(node) => {
                           // Attempt to find this node in the timeline

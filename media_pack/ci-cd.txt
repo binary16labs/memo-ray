@@ -1,0 +1,26 @@
+trigger the packaging command npm run package to compile the revised code into dist/memo-ray-win.exe.
+
+…\memo-ray > npm run package
+
+
+ok commit this and push to main
+…\memo-ray > git status
+
+…\memo-ray > git add agent-os-dashboard/server/index.js agent-os-dashboard/server/lib/config.js agent-os-dashboard/server/lib/detector.js agent-os-dashboard/server/parsers/antigravityParser.js memoray.config.js
+
+
+
+…\memo-ray > git commit -m "fix: Claude co-work/session live sync and dynamic config loading under pkg"
+
+Start Time	Task ID	Tool	Description
+2026-06-15T11:42:54Z	3e4b885e-5c9b-4f03-9595-86d18415211b/task-1706	run_command	git push origin master
+
+
+
+git push origin master
+
+git push origin v1.0.3
+
+
+git push origin master
+git push origin v1.0.4

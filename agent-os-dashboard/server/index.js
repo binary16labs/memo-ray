@@ -493,10 +493,14 @@ app.get('/api/graph/:id', (req, res) => {
     const links = [];
     const visited = new Set();
 
-    // 1. Gather all session-related entities
-    const rawEntities = [];
+    // 1. Gather the full session subtree. We deliberately do NOT truncate during
+    //    traversal: a depth-first cap keeps the oldest (root-near) nodes, but the
+    //    step-through timeline shows the most RECENT actions — so a capped graph
+    //    and the timeline never overlapped and the trace highlight lit up nothing.
+    const SAFETY_CEILING = 50000; // guard against pathological/corrupt trees
+    let rawEntities = [];
     function traverse(nodeId) {
-        if (visited.has(nodeId) || rawEntities.length >= maxNodes) return;
+        if (visited.has(nodeId) || rawEntities.length >= SAFETY_CEILING) return;
         visited.add(nodeId);
 
         const entity = entities.get(nodeId);
@@ -511,6 +515,20 @@ app.get('/api/graph/:id', (req, res) => {
     }
 
     traverse(rootId);
+
+    // 2. Bound the rendered graph to maxNodes for performance, keeping the MOST
+    //    RECENT nodes (plus the root Session, which anchors layout/labels) so the
+    //    visible graph aligns with the recency-ordered timeline and stays traceable.
+    if (rawEntities.length > maxNodes) {
+        const rootEntity = entities.get(rootId);
+        const rest = rawEntities
+            .filter(e => e.id !== rootId)
+            .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+            .slice(0, Math.max(0, maxNodes - 1));
+        rawEntities = rootEntity ? [rootEntity, ...rest] : rest;
+    }
+    // Only nodes we actually keep are valid link endpoints.
+    const keptIds = new Set(rawEntities.map(e => e.id));
 
     // 2. Map of existing real Artifact nodes to avoid duplicates
     const fileRepresentations = new Map(); // pathKey -> nodeId
@@ -542,8 +560,8 @@ app.get('/api/graph/:id', (req, res) => {
             fileRepresentations.set(entity.metadata.filePath.toLowerCase(), entity.id);
         }
 
-        // Add standard parent-child layout links
-        if (entity.parent_id && visited.has(entity.parent_id)) {
+        // Add standard parent-child layout links (only between kept nodes)
+        if (entity.parent_id && keptIds.has(entity.parent_id)) {
             links.push({ source: entity.parent_id, target: entity.id });
         }
     }
@@ -849,7 +867,17 @@ app.get('/api/beta/overview', (req, res) => {
 // Cross-session activity timeline
 app.get('/api/beta/timeline', (req, res) => {
     const { entities, index } = store.load();
-    const limit = Math.min(parseInt(req.query.limit) || 200, 500);
+    const sessionFilter = req.query.session || null;
+    // When scoped to a single session we must return that session's *complete*
+    // action list (a large session can have thousands of nodes); the 500 ceiling
+    // only exists to bound the global cross-session feed.
+    // Single-session step-through returns the session's COMPLETE action list (no
+    // cap) so every step is auditable — rendering is bounded on the client by the
+    // frozen graph layout + minimap, not by dropping data. The global cross-session
+    // feed keeps its tighter ceiling.
+    const limit = sessionFilter
+        ? (parseInt(req.query.limit) || 1000000)
+        : Math.min(parseInt(req.query.limit) || 200, 500);
     const projectFilter = req.query.project || null;
     const agentFilter = req.query.agent || null;
     const typeFilter = req.query.type || null;
@@ -876,9 +904,31 @@ app.get('/api/beta/timeline', (req, res) => {
         return null;
     }
 
+    // Choose the candidate set. For a single-session query we walk DOWN from the
+    // session root via children_ids (O(subtree)) instead of running findSessionId
+    // (an upward parent-walk) over every entity in the store — the latter is
+    // O(entities × chain depth) and made large sessions take many seconds.
+    let candidates;
+    if (sessionFilter) {
+        candidates = [];
+        const seen = new Set();
+        const stack = [sessionFilter];
+        while (stack.length) {
+            const id = stack.pop();
+            if (seen.has(id)) continue;
+            seen.add(id);
+            const e = entities.get(id);
+            if (!e) continue;
+            if (id !== sessionFilter) candidates.push(e);
+            for (const c of (e.children_ids || [])) stack.push(c);
+        }
+    } else {
+        candidates = entities.values();
+    }
+
     // Collect actionable entities (not sessions, with timestamps)
     const actions = [];
-    for (const e of entities.values()) {
+    for (const e of candidates) {
         if (e.type === 'Session') continue;
         if (!e.timestamp) continue;
 
@@ -890,7 +940,8 @@ app.get('/api/beta/timeline', (req, res) => {
             if (typeNorm !== typeFilter.toLowerCase()) continue;
         }
 
-        const sessionId = findSessionId(e.parent_id || e.id);
+        // sessionId is known for the scoped case; otherwise resolve it upward.
+        const sessionId = sessionFilter || findSessionId(e.parent_id || e.id);
         const session = sessionId ? sessionLookup.get(sessionId) : null;
 
         // Project filter
