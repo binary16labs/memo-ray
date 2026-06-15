@@ -195,7 +195,7 @@ function parseArtifacts(sessionDir, sessionUUID, lastSyncTime) {
             content,
             metadata: { fileName: file, filePath: fullPath },
             parent_id: sessionUUID, children_ids: []
-        });
+        }, true);
         updateParentChild(sessionUUID, artifactId);
         count++;
     }
