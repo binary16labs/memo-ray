@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import OrganicGraph from './OrganicGraph';
 import OverviewGrid from './OverviewGrid';
+import bennyLogo from '../assets/benny.png';
 
-const API = `${import.meta.env.VITE_MEMORAY_API || 'http://localhost:3001'}/api`;
+const API = import.meta.env.DEV
+  ? `${import.meta.env.VITE_MEMORAY_API || 'http://localhost:3030'}/api`
+  : '/api';
 
 export default function UnifiedDashboard({ initialSessionId, onSessionLoaded }) {
   const [sessions, setSessions] = useState([]);
@@ -246,7 +249,9 @@ export default function UnifiedDashboard({ initialSessionId, onSessionLoaded }) 
       {/* ─── LEFT SIDEBAR ─── */}
       <aside className="left-sidebar" style={{ background: 'var(--bg-base)', borderRight: '1px solid var(--border-subtle)', padding: '1rem', display: 'flex', flexDirection: 'column' }}>
         <div className="sidebar-header" style={{ marginBottom: '2rem' }}>
-          <div className="sidebar-logo" style={{ color: 'var(--sage)' }}>M</div>
+          <div className="sidebar-logo" style={{ overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}>
+            <img src={bennyLogo} alt="Benny" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          </div>
           <h2 onClick={goHome} style={{ cursor: 'pointer', color: 'var(--text-primary)', fontSize: '1.4rem', fontWeight: 500 }}>Memo-Ray</h2>
         </div>
 

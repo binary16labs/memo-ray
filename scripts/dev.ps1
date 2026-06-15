@@ -1,6 +1,6 @@
 # Memo-Ray dev launcher (PowerShell)
 #
-# Boots the server (Express on :3001) and client (Vite + React on :5175) in parallel.
+# Boots the server (Express on :3030) and client (Vite + React on :5175) in parallel.
 
 $ErrorActionPreference = "Stop"
 
@@ -20,11 +20,11 @@ foreach ($dir in @($serverDir, $clientDir)) {
 }
 
 Write-Host "▸ Memo-Ray dev launcher"
-Write-Host "  server → http://localhost:3001"
+Write-Host "  server → http://localhost:3030"
 Write-Host "  client → http://localhost:5175"
 
-# Server - Express on :3001
-$env:PORT = "3001"
+# Server - Express on :3030
+$env:PORT = "3030"
 $server = Start-Process `
     -FilePath "node" `
     -ArgumentList "index.js" `

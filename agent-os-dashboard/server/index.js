@@ -7,14 +7,15 @@ const { execFile } = require('child_process');
 const si = require('systeminformation');
 
 // Load central configuration contract
-const config = require('../../memoray.config.js');
+const { config, configPath } = require('./lib/config');
+const { detectPaths } = require('./lib/detector');
 
 const { syncClaude, getActiveSessions } = require('./parsers/claudeParser');
 const { syncAntigravity } = require('./parsers/antigravityParser');
 const store = require('./lib/entity_store');
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || config.PORT || 3030;
 
 // CORS: localhost origins only. This server exposes the operator's agent
 // memory AND an OS file-open endpoint — a wildcard origin would let any
@@ -78,7 +79,6 @@ app.get('/api/config', (req, res) => {
 app.post('/api/config', (req, res) => {
     try {
         const newConfig = req.body;
-        const configPath = path.join(__dirname, '..', 'memoray.config.js');
         let fileContent = fs.readFileSync(configPath, 'utf8');
 
         // Regex replacements to safely update strings in the JS file without destroying comments
@@ -91,19 +91,11 @@ app.post('/api/config', (req, res) => {
 
         for (const [key, val] of Object.entries(updates)) {
             if (val) {
-                // Matches: KEY: path.join(...) or KEY: '...' or KEY: "..."
-                // Since our config uses JS logic (path.join, isWin ? ... : ...), we'll do a simpler replacement:
-                // We will just rewrite the file content if it was a plain JSON, but since it's JS with conditional logic,
-                // we should be very careful. Actually, if the user edits it, we might just replace the entire value with a string literal for simplicity,
-                // OR we can just instruct the user that updating through the UI converts the dynamic path.join to a hardcoded string.
-                // Let's replace the right hand side of the colon until the comma or end of line.
                 const regex = new RegExp(`(${key}\\s*:\\s*)([^,\\n]+)(,?)(?=\\s*\\n|\\s*//|$)`, 'g');
-                // We use JSON.stringify to ensure it's safely quoted and escaped
                 fileContent = fileContent.replace(regex, `$1${JSON.stringify(val)}$3`);
             }
         }
         
-        // Handle Arrays (CLAUDE_LOG_DIRS, ANTIGRAVITY_BRAIN_DIRS)
         const arrayUpdates = {
             'CLAUDE_LOG_DIRS': newConfig.CLAUDE_LOG_DIRS,
             'ANTIGRAVITY_BRAIN_DIRS': newConfig.ANTIGRAVITY_BRAIN_DIRS
@@ -111,7 +103,6 @@ app.post('/api/config', (req, res) => {
 
         for (const [key, val] of Object.entries(arrayUpdates)) {
             if (Array.isArray(val)) {
-                // Matches: KEY: [ ... ]
                 const regex = new RegExp(`(${key}\\s*:\\s*\\[)([^\\]]+)(\\])`, 'g');
                 const arrayString = val.map(v => JSON.stringify(v)).join(',\n        ');
                 fileContent = fileContent.replace(regex, `$1\n        ${arrayString}\n    $3`);
@@ -120,11 +111,76 @@ app.post('/api/config', (req, res) => {
 
         fs.writeFileSync(configPath, fileContent, 'utf8');
         
-        // We must tell the user that the server needs a restart for changes to apply
-        res.json({ status: 'ok', message: 'Config saved successfully. Please restart the Memo-Ray server.' });
+        // Reload config in-memory dynamically
+        delete require.cache[require.resolve('./lib/config')];
+        delete require.cache[require.resolve(configPath)];
+        const configModule = require('./lib/config');
+        Object.assign(config, configModule.config);
+
+        res.json({ status: 'ok', message: 'Config saved and reloaded successfully.' });
     } catch (e) {
         console.error('[Server] Config save failed:', e);
         res.status(500).json({ error: 'Failed to save config' });
+    }
+});
+
+// Setup & Cascade Detection Endpoints
+app.get('/api/setup/status', (req, res) => {
+    try {
+        const report = detectPaths(config);
+        const { configPath, dataDir } = require('./lib/config');
+        report.memoray = {
+            configPath,
+            dataDir,
+            configExists: fs.existsSync(configPath),
+            dataExists: fs.existsSync(dataDir)
+        };
+        res.json(report);
+    } catch (e) {
+        console.error('[Server] Setup status failed:', e);
+        res.status(500).json({ error: 'Failed to get setup status' });
+    }
+});
+
+app.post('/api/setup/save', (req, res) => {
+    try {
+        const newConfig = req.body;
+        const formatValue = (val) => {
+            if (Array.isArray(val)) {
+                return '[\n' + val.map(p => `        ${JSON.stringify(p)}`).join(',\n') + '\n    ]';
+            }
+            return JSON.stringify(val);
+        };
+
+        const content = `// ============================================================================
+// MEMO-RAY CONFIGURATION CONTRACT
+// ============================================================================
+// This configuration was updated by the Memo-Ray setup wizard.
+// You can edit these paths below directly or use the Mission Control configuration.
+// ============================================================================
+
+module.exports = {
+    CLAUDE_SESSIONS_DIR: ${formatValue(newConfig.CLAUDE_SESSIONS_DIR)},
+    CLAUDE_LOG_DIRS: ${formatValue(newConfig.CLAUDE_LOG_DIRS)},
+    CLAUDE_WORKTREES_PATH: ${formatValue(newConfig.CLAUDE_WORKTREES_PATH)},
+    CLAUDE_CONFIG_PATH: ${formatValue(newConfig.CLAUDE_CONFIG_PATH)},
+    ANTIGRAVITY_BRAIN_DIRS: ${formatValue(newConfig.ANTIGRAVITY_BRAIN_DIRS)},
+    GEMINI_CONFIG_DIR: ${formatValue(newConfig.GEMINI_CONFIG_DIR)}
+};
+`;
+        fs.writeFileSync(configPath, content, 'utf8');
+
+        // Reload config in-memory dynamically
+        delete require.cache[require.resolve('./lib/config')];
+        delete require.cache[require.resolve(configPath)];
+        const configModule = require('./lib/config');
+        Object.assign(config, configModule.config);
+
+        console.log('[Setup] Saved new configuration and reloaded in-memory state.');
+        res.json({ status: 'ok', message: 'Configuration saved and reloaded.' });
+    } catch (e) {
+        console.error('[Server] Setup save failed:', e);
+        res.status(500).json({ error: 'Failed to save configuration: ' + e.message });
     }
 });
 
@@ -140,17 +196,13 @@ app.post('/api/open-folder', (req, res) => {
         return res.status(400).json({ error: 'Invalid or missing directory path' });
     }
     
-    // Open the folder natively based on OS
-    const command = os.platform() === 'win32' ? 'start ""' : (os.platform() === 'darwin' ? 'open' : 'xdg-open');
-    const { exec } = require('child_process');
-    
-    exec(`${command} "${dirPath}"`, (error) => {
-        if (error) {
-            console.error('[Server] Failed to open folder:', error);
-            return res.status(500).json({ error: 'Failed to open folder' });
-        }
+    try {
+        osOpenFile(dirPath);
         res.json({ status: 'ok', message: 'Folder opened successfully' });
-    });
+    } catch (error) {
+        console.error('[Server] Failed to open folder:', error);
+        res.status(500).json({ error: 'Failed to open folder: ' + error.message });
+    }
 });
 
 app.get('/api/sessions', (req, res) => {
@@ -1042,9 +1094,134 @@ app.get('/api/system/capabilities', async (req, res) => {
     }
 });
 
+// Serve static client assets in production
+const distPath = path.join(__dirname, '..', 'client', 'dist');
+app.use(express.static(distPath));
+app.get(/.*/, (req, res, next) => {
+    if (req.path.startsWith('/api')) {
+        return next();
+    }
+    const indexPath = path.join(distPath, 'index.html');
+    if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+    } else {
+        next();
+    }
+});
+
 // ─── START ───────────────────────────────────────────────
 
-app.listen(PORT, async () => {
-    console.log(`[Server] Memo-Ray running on http://localhost:${PORT}`);
-    await performSync();
-});
+function openBrowser(url) {
+    const { isPackaged } = require('./lib/config');
+    
+    // In production/packaged mode (or by default on Windows/Mac if browsers exist), launch like an app
+    if (isPackaged || process.env.NODE_ENV === 'production' || process.env.APP_MODE === 'true') {
+        if (process.platform === 'win32') {
+            const edgePath = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
+            const chromePaths = [
+                'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+                'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+                path.join(os.homedir(), 'AppData\\Local\\Google\\Chrome\\Application\\chrome.exe')
+            ];
+            
+            let browserPath = null;
+            for (const p of chromePaths) {
+                if (fs.existsSync(p)) {
+                    browserPath = p;
+                    break;
+                }
+            }
+            if (!browserPath && fs.existsSync(edgePath)) {
+                browserPath = edgePath;
+            }
+            
+            if (browserPath) {
+                execFile(browserPath, [`--app=${url}`], (err) => {
+                    if (err) {
+                        console.error('[Server] Failed to open in app mode, falling back to default:', err);
+                        openDefaultBrowser(url);
+                    }
+                });
+                return;
+            }
+        } else if (process.platform === 'darwin') {
+            const chromePathMac = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+            if (fs.existsSync(chromePathMac)) {
+                execFile(chromePathMac, [`--app=${url}`], (err) => {
+                    if (err) openDefaultBrowser(url);
+                });
+                return;
+            }
+        }
+    }
+    
+    openDefaultBrowser(url);
+}
+
+function openDefaultBrowser(url) {
+    if (process.platform === 'win32') {
+        execFile('cmd.exe', ['/c', 'start', '', url], (err) => {
+            if (err) console.error('[Server] Failed to open browser:', err);
+        });
+    } else if (process.platform === 'darwin') {
+        execFile('open', [url], () => {});
+    } else {
+        execFile('xdg-open', [url], () => {});
+    }
+}
+
+let serverInstance = null;
+
+function startServer(portOverride = null) {
+    if (serverInstance) return;
+    
+    const portToUse = portOverride || PORT;
+    serverInstance = app.listen(portToUse, async () => {
+        console.log(`[Server] Memo-Ray running on http://localhost:${portToUse}`);
+        
+        // Automatically open browser in packaged/production mode
+        const { isPackaged } = require('./lib/config');
+        if (isPackaged || process.env.NODE_ENV === 'production') {
+            openBrowser(`http://localhost:${portToUse}`);
+        }
+
+        await performSync();
+    });
+    return serverInstance;
+}
+
+function stopServer() {
+    if (serverInstance) {
+        serverInstance.close();
+        serverInstance = null;
+        console.log('[Server] Memo-Ray stopped.');
+    }
+}
+
+// Export for tray or other programmatic usage
+module.exports = { app, startServer, stopServer, openBrowser, PORT };
+
+// If this is the main module (not required by another file), start automatically
+if (require.main === module) {
+    const { isPackaged } = require('./lib/config');
+    
+    // Windows Background Spawning to hide the console shell window
+    if (isPackaged && process.platform === 'win32' && !process.argv.includes('--background')) {
+        const { spawn } = require('child_process');
+        const child = spawn(process.argv[0], [...process.argv.slice(1), '--background'], {
+            detached: true,
+            stdio: 'ignore',
+            windowsHide: true
+        });
+        child.unref();
+        process.exit(0);
+    }
+
+    startServer();
+    try {
+        const { initTray } = require('./tray');
+        initTray();
+    } catch (e) {
+        console.error('[Tray] Failed to init tray:', e);
+    }
+}

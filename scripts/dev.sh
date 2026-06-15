@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Memo-Ray dev launcher (POSIX)
 #
-# Boots the server (Express on :3001) and client (Vite on :5175) in parallel.
+# Boots the server (Express on :3030) and client (Vite on :5175) in parallel.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -17,11 +17,11 @@ for DIR in "${SERVER_DIR}" "${CLIENT_DIR}"; do
 done
 
 echo "▸ Memo-Ray dev launcher"
-echo "  server → http://localhost:3001"
+echo "  server → http://localhost:3030"
 echo "  client → http://localhost:5175"
 
-# Server - Express on :3001
-export PORT="${PORT:-3001}"
+# Server - Express on :3030
+export PORT="${PORT:-3030}"
 ( cd "${SERVER_DIR}" && node index.js ) &
 SERVER_PID=$!
 

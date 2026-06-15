@@ -19,7 +19,7 @@ The Agent OS Dashboard is a local web application designed to act as a mission c
 ### 4.1 Portable Entity Object Architecture & Delta Sync
 - **Atomic File-System Database**: Discarding traditional databases for an ultra-portable, highly scalable file system architecture (`server/data/entities/`). Every session, thought, tool call, and artifact is a distinct JSON file.
 - **Modeling Abstract**: A central `data_model_abstract.md` defines the strict ontology and schema. Future AI agents can read this to instantly understand how to navigate the data ecosystem without tribal knowledge or context overload.
-- **Delta Sync Engine**: The backend securely reads `C:\Users\nsdha\AppData\Roaming\Claude\...` and `C:\Users\nsdha\.gemini\antigravity\brain\...`. It checks "Last Modified" timestamps and only parses new/updated files, writing them to atomic JSON files to ensure lightning-fast UI loads.
+- **Delta Sync Engine**: The backend securely reads the user's local Claude Code and Antigravity directory logs dynamically. It checks "Last Modified" timestamps and only parses new/updated files, writing them to atomic JSON files to ensure lightning-fast UI loads.
 
 ### 4.2 Comprehensive Lineage Governance View
 - **Full Spectrum Mapping**: Maps Claude web chats, Claude Code sessions, Co-work caches, and Antigravity transcripts.

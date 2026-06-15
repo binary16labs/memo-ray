@@ -61,7 +61,7 @@ async function main() {
   checkDependencies(serverDir, 'server');
   checkDependencies(clientDir, 'client');
 
-  const serverPort = process.env.PORT || 3001;
+  const serverPort = process.env.PORT || 3030;
   const serverRunning = await checkPortInUse(serverPort);
 
   console.log(`${colors.cyan}▸ Starting Memo-Ray...${colors.reset}`);

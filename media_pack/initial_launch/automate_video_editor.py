@@ -24,7 +24,7 @@ from moviepy import (
 )
 
 # Configurations - Modify these to fit your video scaling/cropping
-USER_VIDEO_PATH = r"C:\Users\nsdha\Videos\2026-06-12 21-31-48.mp4"
+USER_VIDEO_PATH = os.environ.get("USER_VIDEO_PATH", os.path.expanduser("~/Videos/dashboard_walkthrough.mp4"))
 OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "compiled_promo_video.mp4")
 
 # Dimensions of the CRT monitor screen inside the templates (Width, Height)

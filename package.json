@@ -1,9 +1,33 @@
 {
-  "name": "memo-ray-root",
+  "name": "memo-ray",
   "version": "1.0.0",
   "private": true,
-  "description": "Start script launcher for Memo-Ray",
+  "description": "Developer dashboard for tracking agent activity and workspace history",
+  "bin": "agent-os-dashboard/server/index.js",
   "scripts": {
-    "dev": "node scripts/dev.js"
+    "dev": "node scripts/dev.js",
+    "build:client": "npm run build --prefix agent-os-dashboard/client",
+    "build:server": "npm install --prefix agent-os-dashboard/server",
+    "build": "npm run build:client && npm run build:server",
+    "package": "pkg . --out-path dist"
+  },
+  "pkg": {
+    "assets": [
+      "agent-os-dashboard/client/dist/**/*",
+      "memoray.config.js",
+      "node_modules/systray2/traybin/*",
+      "agent-os-dashboard/server/icon.ico"
+    ],
+    "targets": [
+      "node18-win-x64",
+      "node18-linux-x64",
+      "node18-macos-x64"
+    ]
+  },
+  "devDependencies": {
+    "pkg": "^5.8.1"
+  },
+  "dependencies": {
+    "systray2": "^2.1.4"
   }
 }

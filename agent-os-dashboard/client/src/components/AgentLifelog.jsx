@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 
-const API = 'http://localhost:3001/api';
+const API = import.meta.env.DEV
+  ? `${import.meta.env.VITE_MEMORAY_API || 'http://localhost:3030'}/api`
+  : '/api';
 
 export default function AgentLifelog({ onTeleport }) {
     const [lifelog, setLifelog] = useState([]);

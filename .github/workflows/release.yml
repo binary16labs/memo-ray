@@ -1,0 +1,71 @@
+name: Release Memo-Ray Standalone Binary
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install root dependencies
+        run: npm install
+
+      - name: Install client dependencies
+        run: npm install --prefix agent-os-dashboard/client
+
+      - name: Install server dependencies
+        run: npm install --prefix agent-os-dashboard/server
+
+      - name: Build applications
+        run: npm run build
+
+      - name: Package binaries
+        run: npm run package
+
+      - name: Rename and prepare artifacts
+        run: |
+          mkdir -p release-artifacts
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          
+          # Find and move generated binaries in dist/ to release-artifacts/ with version tags
+          find dist/ -type f | while read -r file; do
+            filename=$(basename "$file")
+            
+            if [[ "$filename" == *".exe" ]]; then
+              mv "$file" "release-artifacts/memo-ray-${TAG_NAME}-win.exe"
+            elif [[ "$filename" == *"macos"* ]]; then
+              mv "$file" "release-artifacts/memo-ray-${TAG_NAME}-macos"
+            elif [[ "$filename" == *"linux"* ]]; then
+              mv "$file" "release-artifacts/memo-ray-${TAG_NAME}-linux"
+            else
+              mv "$file" "release-artifacts/${filename}-${TAG_NAME}"
+            fi
+          done
+          
+          echo "=== Release Artifacts ==="
+          ls -la release-artifacts/
+
+      - name: Create Release and Upload Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release-artifacts/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

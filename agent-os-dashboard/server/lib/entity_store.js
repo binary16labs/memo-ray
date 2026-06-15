@@ -10,8 +10,9 @@
 
 const fs = require('fs');
 const path = require('path');
+const { dataDir } = require('./config');
 
-const DATA_DIR = path.join(__dirname, '..', 'data');
+const DATA_DIR = dataDir;
 const ENTITIES_DIR = path.join(DATA_DIR, 'entities');
 const INDEX_FILE = path.join(DATA_DIR, 'index.json');
 

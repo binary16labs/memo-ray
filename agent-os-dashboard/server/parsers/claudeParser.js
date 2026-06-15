@@ -5,7 +5,7 @@ const readline = require('readline');
 const crypto = require('crypto');
 
 // Load central configuration contract
-const config = require('../../../memoray.config.js');
+const { config, dataDir } = require('../lib/config');
 
 // Active Claude Code sessions directory
 const CLAUDE_SESSIONS_DIR = config.CLAUDE_SESSIONS_DIR;
@@ -14,7 +14,7 @@ const CLAUDE_SESSIONS_DIR = config.CLAUDE_SESSIONS_DIR;
 const CLAUDE_BASE_DIRS = process.env.MEMORAY_CLAUDE_DIRS
     ? process.env.MEMORAY_CLAUDE_DIRS.split(';').map(p => p.trim()).filter(Boolean)
     : config.CLAUDE_LOG_DIRS;
-const DATA_DIR = path.join(__dirname, '..', 'data');
+const DATA_DIR = dataDir;
 const ENTITIES_DIR = path.join(DATA_DIR, 'entities');
 const INDEX_FILE = path.join(DATA_DIR, 'index.json');
 

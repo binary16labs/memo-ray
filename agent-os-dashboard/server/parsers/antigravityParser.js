@@ -5,13 +5,13 @@ const readline = require('readline');
 const crypto = require('crypto');
 
 // Load central configuration contract
-const config = require('../../../memoray.config.js');
+const { config, dataDir } = require('../lib/config');
 
 // Override with MEMORAY_ANTIGRAVITY_DIR for non-standard installs or fixtures
 const ANTIGRAVITY_DIRS = process.env.MEMORAY_ANTIGRAVITY_DIR 
     ? [process.env.MEMORAY_ANTIGRAVITY_DIR] 
     : config.ANTIGRAVITY_BRAIN_DIRS;
-const DATA_DIR = path.join(__dirname, '..', 'data');
+const DATA_DIR = dataDir;
 const ENTITIES_DIR = path.join(DATA_DIR, 'entities');
 const INDEX_FILE = path.join(DATA_DIR, 'index.json');
 

@@ -35,13 +35,13 @@ Alternatively, you can run the native launchers directly:
 - **Windows (PowerShell)**: `.\scripts\dev.ps1`
 - **macOS/Linux (Bash)**: `./scripts/dev.sh`
 
-*Note: If port 3001 is already occupied (e.g., because you started the Memo-Ray server through `prime-silo`'s dev launcher), the scripts will automatically detect it, skip booting a duplicate server, and only run the client.*
+*Note: If port 3030 is already occupied (e.g., because you started the Memo-Ray server through `prime-silo`'s dev launcher), the scripts will automatically detect it, skip booting a duplicate server, and only run the client.*
 
 ### The Manual Way
 
 If you prefer to run them in separate terminals:
 ```bash
-# Server (Express, :3001) — syncs agent logs on boot, then on demand
+# Server (Express, :3030) — syncs agent logs on boot, then on demand
 cd agent-os-dashboard/server
 npm install
 node index.js
@@ -60,10 +60,10 @@ Everything is derived from your home directory by default. Override only when ne
 
 | Env var | Default | Purpose |
 |---|---|---|
-| `PORT` | `3001` | Server port |
+| `PORT` | `3030` | Server port |
 | `MEMORAY_CLAUDE_DIRS` | `%USERPROFILE%\AppData\Roaming\Claude\{local-agent-mode-sessions,claude-code-sessions}` | Semicolon-separated Claude log roots |
 | `MEMORAY_ANTIGRAVITY_DIR` | `~/.gemini/antigravity/brain` | Antigravity brain root |
-| `VITE_MEMORAY_API` | `http://localhost:3001` | API base for the client |
+| `VITE_MEMORAY_API` | `http://localhost:3030` | API base for the client |
 
 ## Data architecture
 
@@ -78,7 +78,7 @@ Atomic file-system database — every session, thought, tool call, and artifact 
 
 ## Prime-Silo integration
 
-Prime-Silo's demo site dashboard includes a Memo-Ray card that health-checks `:3001` and shows live node counts. Boot both stacks and the operator gets one pane of glass: runs lineage (Prime-Silo) beside conversation lineage (Memo-Ray).
+Prime-Silo's demo site dashboard includes a Memo-Ray card that health-checks `:3030` and shows live node counts. Boot both stacks and the operator gets one pane of glass: runs lineage (Prime-Silo) beside conversation lineage (Memo-Ray).
 
 ---
 
