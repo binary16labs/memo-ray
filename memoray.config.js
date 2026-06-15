@@ -27,7 +27,11 @@ module.exports = {
     CLAUDE_LOG_DIRS: [
         path.join(home, '.claude', 'projects'),                                 // Mac/Linux default
         path.join(home, 'AppData', 'Roaming', 'Claude', 'projects'),            // Windows default
-        path.join(home, 'Library', 'Application Support', 'Claude', 'projects') // Mac alternative
+        path.join(home, 'AppData', 'Roaming', 'Claude', 'local-agent-mode-sessions'),
+        path.join(home, 'AppData', 'Roaming', 'Claude', 'claude-code-sessions'),
+        path.join(home, 'Library', 'Application Support', 'Claude', 'projects'), // Mac alternative
+        path.join(home, 'Library', 'Application Support', 'Claude', 'local-agent-mode-sessions'),
+        path.join(home, 'Library', 'Application Support', 'Claude', 'claude-code-sessions')
     ],
     
     // Path to the file that tracks Git Worktrees created by Claude Code

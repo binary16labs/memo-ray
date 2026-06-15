@@ -13,7 +13,11 @@ const PROBE_LISTS = {
     CLAUDE_LOG_DIRS: [
         path.join(home, '.claude', 'projects'),
         path.join(home, 'AppData', 'Roaming', 'Claude', 'projects'),
-        path.join(home, 'Library', 'Application Support', 'Claude', 'projects')
+        path.join(home, 'AppData', 'Roaming', 'Claude', 'local-agent-mode-sessions'),
+        path.join(home, 'AppData', 'Roaming', 'Claude', 'claude-code-sessions'),
+        path.join(home, 'Library', 'Application Support', 'Claude', 'projects'),
+        path.join(home, 'Library', 'Application Support', 'Claude', 'local-agent-mode-sessions'),
+        path.join(home, 'Library', 'Application Support', 'Claude', 'claude-code-sessions')
     ],
     CLAUDE_WORKTREES_PATH: [
         isWin 

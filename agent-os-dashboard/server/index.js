@@ -117,10 +117,8 @@ app.post('/api/config', (req, res) => {
         fs.writeFileSync(configPath, fileContent, 'utf8');
         
         // Reload config in-memory dynamically
-        delete require.cache[require.resolve('./lib/config')];
-        delete require.cache[require.resolve(configPath)];
         const configModule = require('./lib/config');
-        Object.assign(config, configModule.config);
+        configModule.reloadConfig();
 
         res.json({ status: 'ok', message: 'Config saved and reloaded successfully.' });
     } catch (e) {
@@ -176,10 +174,8 @@ module.exports = {
         fs.writeFileSync(configPath, content, 'utf8');
 
         // Reload config in-memory dynamically
-        delete require.cache[require.resolve('./lib/config')];
-        delete require.cache[require.resolve(configPath)];
         const configModule = require('./lib/config');
-        Object.assign(config, configModule.config);
+        configModule.reloadConfig();
 
         console.log('[Setup] Saved new configuration and reloaded in-memory state.');
         res.json({ status: 'ok', message: 'Configuration saved and reloaded.' });

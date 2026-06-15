@@ -247,9 +247,14 @@ async function syncAntigravity() {
                 try { existingSession = JSON.parse(fs.readFileSync(existingFile, 'utf-8')); } catch { /* ignore */ }
             }
 
+            let sessionTimestamp = stat.mtimeMs;
+            if (fs.existsSync(transcriptPath)) {
+                try { sessionTimestamp = fs.statSync(transcriptPath).mtimeMs; } catch {}
+            }
+
             saveEntity({
                 id: sessionUUID, type: 'Session', agent: 'Antigravity',
-                timestamp: stat.mtimeMs,
+                timestamp: Math.max(sessionTimestamp, existingSession.timestamp || 0),
                 content: title,
                 metadata: { ...existingSession.metadata, sessionPath },
                 parent_id: null, children_ids: existingSession.children_ids || []

@@ -72,17 +72,39 @@ if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
 }
 
-try {
-    config = require(configPath);
-} catch (e) {
-    console.error(`[Config] Failed to load configuration from ${configPath}:`, e.message);
-    // Fallback if loading failed
-    config = {};
+const vm = require('vm');
+
+function reloadConfig() {
+    try {
+        if (fs.existsSync(configPath)) {
+            const content = fs.readFileSync(configPath, 'utf8');
+            const sandbox = {
+                module: { exports: {} },
+                require: require,
+                path: path,
+                os: os,
+                console: console
+            };
+            vm.runInNewContext(content, sandbox);
+
+            // Mutate the existing config object in-place so references in other modules remain valid
+            for (const key of Object.keys(config)) {
+                delete config[key];
+            }
+            Object.assign(config, sandbox.module.exports);
+        }
+    } catch (e) {
+        console.error(`[Config] Failed to load configuration from ${configPath}:`, e.message);
+    }
 }
+
+// Initial load
+reloadConfig();
 
 module.exports = {
     config,
     configPath,
     dataDir,
-    isPackaged
+    isPackaged,
+    reloadConfig
 };
