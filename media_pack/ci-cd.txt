@@ -19,8 +19,17 @@ Start Time	Task ID	Tool	Description
 
 git push origin master
 
+git tag -a v1.0.5 -m "Release version v1.0.5"
+
 git push origin v1.0.3
 
 
 git push origin master
 git push origin v1.0.4
+
+
+C:\Users\nsdha\OneDrive\binary16\memo-ray\dist
+
+git push origin master
+
+git push origin v1.0.5

@@ -1,0 +1,31 @@
+{
+  "schema": "aamp.app/1",
+  "id": "memo-ray",
+  "name": "Memo-Ray",
+  "description": "Standalone agent-memory graph: X-rays Claude + Antigravity session logs into an explorable lineage map. Runs on its own (system tray, configurable PORT) and serves the memory surface that the prime-silo shell proxies.",
+  "repo": "https://github.com/binary16labs/memo-ray",
+  "role": "service",
+  "requires": [],
+  "provides": [
+    {
+      "service": "memory-graph",
+      "preferredPort": 3030,
+      "portRange": [
+        3030,
+        3050
+      ],
+      "health": "/api/ecosystem/manifest",
+      "baseUrlVar": "MEMORAY_BASE_URL"
+    }
+  ],
+  "artifacts": {
+    "win": "memo-ray-*-win.exe",
+    "macos": "memo-ray-*-macos",
+    "linux": "memo-ray-*-linux"
+  },
+  "signature": {
+    "algorithm": "HMAC-SHA256",
+    "value": "ac4ca42e8c3c4f7061d5e3210f0485f3db9c711dc461a6f116426c3a7346e067",
+    "signed_at": "2026-06-16T13:41:48.561Z"
+  }
+}

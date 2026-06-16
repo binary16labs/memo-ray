@@ -9,13 +9,18 @@ const si = require('systeminformation');
 // Load central configuration contract
 const { config, configPath } = require('./lib/config');
 const { detectPaths } = require('./lib/detector');
+const { lockedPort } = require('./lib/registry');
 
 const { syncClaude, getActiveSessions } = require('./parsers/claudeParser');
 const { syncAntigravity } = require('./parsers/antigravityParser');
 const store = require('./lib/entity_store');
 
 const app = express();
-const PORT = process.env.PORT || config.PORT || 3030;
+// Port precedence: explicit env > app-registry lockfile (peer-discovered) >
+// local config > default. The lockfile entry lets the binary16 registry's
+// resolver auto-bump us off a clash and have prime-silo follow automatically;
+// when no registry is present, lockedPort() returns null and we stay standalone.
+const PORT = process.env.PORT || lockedPort('memo-ray', 'memory-graph') || config.PORT || 3030;
 
 // CORS: localhost origins only. This server exposes the operator's agent
 // memory AND an OS file-open endpoint — a wildcard origin would let any

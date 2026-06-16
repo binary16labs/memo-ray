@@ -29,3 +29,6 @@ agent-os-dashboard/server/data/
 *.njsproj
 *.sln
 *.sw?
+
+# App-registry generated port lockfile (machine-local; never committed)
+apps.lock.json

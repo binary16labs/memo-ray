@@ -22,6 +22,12 @@ jobs:
           node-version: 20
           cache: 'npm'
 
+      # Validate the app-registry self-descriptor (schema aamp.app/1) so a
+      # malformed descriptor fails the release rather than shipping broken.
+      - name: Validate app.manifest.json
+        run: |
+          node -e "const m=require('./app.manifest.json'); if(m.schema!=='aamp.app/1') throw new Error('bad schema: '+m.schema); if(m.id!=='memo-ray') throw new Error('bad id: '+m.id); if(!Array.isArray(m.provides)||!m.provides.length) throw new Error('no provides'); console.log('app.manifest.json ok:', m.id, m.provides.map(p=>p.service+':'+p.preferredPort).join(','));"
+
       - name: Install root dependencies
         run: npm install
 
