@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Memo-Ray: The MCP Architecture</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-main: #0B0E0D;
+      --bg-card: #121614;
+      --bg-code: #1A1F1C;
+      --text-main: #E8ECE9;
+      --text-muted: #8A968F;
+      --border-light: rgba(149, 165, 149, 0.15);
+      --accent-sage: #8b9c8b;
+      --accent-taupe: #b8a898;
+      --accent-rust: #db533f;
+      --font-body: 'Inter', sans-serif;
+      --font-serif: 'Playfair Display', serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      --shadow-soft: 0 4px 24px rgba(0, 0, 0, 0.4);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-main);
+      font-family: var(--font-body);
+      color: var(--text-main);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 4rem 2rem;
+    }
+
+    /* Header / Hero */
+    header {
+      margin-bottom: 5rem;
+      text-align: center;
+    }
+
+    header h1 {
+      font-family: var(--font-serif);
+      font-size: 3.5rem;
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      margin-bottom: 1.5rem;
+      color: var(--text-main);
+    }
+
+    header p.subtitle {
+      font-size: 1.2rem;
+      color: var(--text-muted);
+      max-width: 600px;
+      margin: 0 auto;
+      font-weight: 300;
+    }
+
+    /* The Origin Story */
+    .story-section {
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      border-radius: 12px;
+      padding: 3rem;
+      margin-bottom: 4rem;
+      box-shadow: var(--shadow-soft);
+      position: relative;
+    }
+
+    .story-section::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; width: 4px; height: 100%;
+      background: var(--accent-sage);
+      border-top-left-radius: 12px;
+      border-bottom-left-radius: 12px;
+    }
+
+    .story-section h2 {
+      font-family: var(--font-serif);
+      font-size: 2rem;
+      font-weight: 400;
+      margin-bottom: 1rem;
+    }
+
+    .story-section p {
+      font-size: 1.05rem;
+      color: var(--text-muted);
+      margin-bottom: 1rem;
+    }
+
+    /* Section Headers */
+    .section-title {
+      font-family: var(--font-serif);
+      font-size: 2.2rem;
+      font-weight: 400;
+      margin-bottom: 2rem;
+      text-align: center;
+      border-bottom: 1px solid var(--border-light);
+      padding-bottom: 1rem;
+    }
+
+    /* Benchmark Cards */
+    .test-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+      margin-bottom: 5rem;
+    }
+
+    .test-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      border-radius: 8px;
+      padding: 2.5rem;
+      box-shadow: var(--shadow-soft);
+    }
+
+    .test-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 1.5rem;
+    }
+
+    .test-header h3 {
+      font-family: var(--font-serif);
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+
+    .test-desc {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      margin-bottom: 2rem;
+    }
+
+    .mcp-tool-pill {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      background: var(--bg-code);
+      color: var(--text-muted);
+      padding: 0.3rem 0.6rem;
+      border-radius: 4px;
+      border: 1px solid var(--border-light);
+    }
+
+    /* Comparison Bars */
+    .comparison-row {
+      display: flex;
+      align-items: center;
+      margin-bottom: 1rem;
+      gap: 1.5rem;
+    }
+
+    .comp-label {
+      width: 150px;
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .comp-bar-wrapper {
+      flex: 1;
+      height: 6px;
+      background: var(--bg-code);
+      border-radius: 3px;
+      overflow: hidden;
+      display: flex;
+    }
+
+    .comp-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 1s ease-out;
+    }
+
+    .bar-no-mcp { background: var(--accent-rust); }
+    .bar-mcp { background: var(--accent-sage); }
+
+    .comp-val {
+      width: 100px;
+      text-align: right;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    /* Raw Data Drilldown */
+    .drilldown-btn {
+      background: none;
+      border: none;
+      color: var(--accent-taupe);
+      font-size: 0.85rem;
+      cursor: pointer;
+      text-decoration: underline;
+      margin-top: 0.5rem;
+      display: inline-block;
+      font-family: var(--font-body);
+    }
+
+    .drilldown-btn:hover {
+      color: var(--text-main);
+    }
+
+    .raw-data-panel {
+      display: none;
+      background: var(--bg-code);
+      border: 1px solid var(--border-light);
+      border-radius: 6px;
+      padding: 1rem;
+      margin-top: 1.5rem;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      white-space: pre-wrap;
+      max-height: 250px;
+      overflow-y: auto;
+    }
+
+    .raw-data-panel.active {
+      display: block;
+    }
+
+    .raw-data-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+
+    .raw-col h4 {
+      font-family: var(--font-body);
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.5rem;
+      color: var(--text-main);
+    }
+
+    /* Test 5 Highlight Section */
+    .feature-test {
+      background: var(--bg-card);
+      border: 1px solid var(--accent-sage);
+      border-radius: 12px;
+      padding: 3rem;
+      margin-bottom: 4rem;
+      box-shadow: 0 10px 30px rgba(149, 165, 149, 0.1);
+    }
+
+    .feature-test h2 {
+      font-family: var(--font-serif);
+      font-size: 2rem;
+      margin-bottom: 1rem;
+      color: var(--text-main);
+    }
+
+    .skills-list {
+      margin-top: 1.5rem;
+      list-style-type: none;
+      background: var(--bg-code);
+      padding: 1.5rem;
+      border-radius: 8px;
+    }
+
+    .skills-list li {
+      margin-bottom: 0.5rem;
+      font-size: 0.95rem;
+      color: var(--text-muted);
+    }
+
+    .skills-list li::before {
+      content: '→';
+      color: var(--accent-sage);
+      margin-right: 0.5rem;
+      font-weight: bold;
+    }
+
+    footer {
+      text-align: center;
+      padding: 3rem 0;
+      color: var(--accent-taupe);
+      font-size: 0.9rem;
+      border-top: 1px solid var(--border-light);
+      margin-top: 4rem;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <h1>Memo-Ray</h1>
+      <p class="subtitle">Context preservation and skill extraction for Agentic workflows.</p>
+    </header>
+
+    <div class="story-section">
+      <h2>The Genesis of Memory</h2>
+      <p>
+        Memo-Ray was born from a frustrating limitation: <strong>token expiration boundaries.</strong> During a long-running, complex development task, an agent hit a hard token limit with its AI provider. The session died. Hours of nuanced, personalized project context, architectural decisions, and workflows were stranded.
+      </p>
+      <p>
+        We needed to spin up a new session to continue work, but without paying the massive "Token Tax" to re-ingest all the raw historical logs. 
+      </p>
+      <p>
+        Memo-Ray acts as an intermediary MCP server. It filters, aggregates, and summarizes your project's entire history locally. Instead of an LLM drowning in $O(N^2)$ raw file tokens, it queries Memo-Ray to instantly receive the precise insights and skills it needs to continue the work seamlessly.
+      </p>
+    </div>
+
+    <h2 class="section-title">The Token Tax Audit</h2>
+
+    <div class="test-grid">
+      
+      <!-- Test 1 -->
+      <div class="test-card">
+        <div class="test-header">
+          <div>
+            <h3>1. Session Metadata Resolution</h3>
+            <p class="test-desc">Fetching the headers and latest active session details.</p>
+          </div>
+          <span class="mcp-tool-pill">get_recent_sessions</span>
+        </div>
+
+        <div class="comparison-row">
+          <div class="comp-label">Direct File Access</div>
+          <div class="comp-bar-wrapper"><div id="t1-no-mcp-bar" class="comp-bar-fill bar-no-mcp" style="width: 0%;"></div></div>
+          <div id="t1-no-mcp-val" class="comp-val">-- tokens</div>
+        </div>
+        <div class="comparison-row">
+          <div class="comp-label">MCP Resolution</div>
+          <div class="comp-bar-wrapper"><div id="t1-mcp-bar" class="comp-bar-fill bar-mcp" style="width: 0%;"></div></div>
+          <div id="t1-mcp-val" class="comp-val">-- tokens</div>
+        </div>
+
+        <button class="drilldown-btn" onclick="toggleRawData(1)">View Raw Payload Data</button>
+        <div id="raw-1" class="raw-data-panel">
+          <div class="raw-data-grid">
+            <div class="raw-col">
+              <h4>Direct File Payload</h4>
+              <div id="raw-t1-no"></div>
+            </div>
+            <div class="raw-col">
+              <h4>MCP Payload</h4>
+              <div id="raw-t1-yes"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Test 2 -->
+      <div class="test-card">
+        <div class="test-header">
+          <div>
+            <h3>2. Full Timeline Reconstruction</h3>
+            <p class="test-desc">Resolving the recursive timeline of thoughts, tools, and message dependencies.</p>
+          </div>
+          <span class="mcp-tool-pill">get_session_timeline</span>
+        </div>
+
+        <div class="comparison-row">
+          <div class="comp-label">Direct File Access</div>
+          <div class="comp-bar-wrapper"><div id="t2-no-mcp-bar" class="comp-bar-fill bar-no-mcp" style="width: 0%;"></div></div>
+          <div id="t2-no-mcp-val" class="comp-val">-- tokens</div>
+        </div>
+        <div class="comparison-row">
+          <div class="comp-label">MCP Resolution</div>
+          <div class="comp-bar-wrapper"><div id="t2-mcp-bar" class="comp-bar-fill bar-mcp" style="width: 0%;"></div></div>
+          <div id="t2-mcp-val" class="comp-val">-- tokens</div>
+        </div>
+
+        <button class="drilldown-btn" onclick="toggleRawData(2)">View Raw Payload Data</button>
+        <div id="raw-2" class="raw-data-panel">
+          <div class="raw-data-grid">
+            <div class="raw-col">
+              <h4>Direct File Payload</h4>
+              <div id="raw-t2-no"></div>
+            </div>
+            <div class="raw-col">
+              <h4>MCP Payload</h4>
+              <div id="raw-t2-yes"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Test 3 -->
+      <div class="test-card">
+        <div class="test-header">
+          <div>
+            <h3>3. Query by Project Filter</h3>
+            <p class="test-desc">Scanning database files to extract sessions referencing a specific project.</p>
+          </div>
+          <span class="mcp-tool-pill">get_project_activity</span>
+        </div>
+
+        <div class="comparison-row">
+          <div class="comp-label">Direct File Access</div>
+          <div class="comp-bar-wrapper"><div id="t3-no-mcp-bar" class="comp-bar-fill bar-no-mcp" style="width: 0%;"></div></div>
+          <div id="t3-no-mcp-val" class="comp-val">-- tokens</div>
+        </div>
+        <div class="comparison-row">
+          <div class="comp-label">MCP Resolution</div>
+          <div class="comp-bar-wrapper"><div id="t3-mcp-bar" class="comp-bar-fill bar-mcp" style="width: 0%;"></div></div>
+          <div id="t3-mcp-val" class="comp-val">-- tokens</div>
+        </div>
+
+        <button class="drilldown-btn" onclick="toggleRawData(3)">View Raw Payload Data</button>
+        <div id="raw-3" class="raw-data-panel">
+          <div class="raw-data-grid">
+            <div class="raw-col">
+              <h4>Direct File Payload</h4>
+              <div id="raw-t3-no"></div>
+            </div>
+            <div class="raw-col">
+              <h4>MCP Payload</h4>
+              <div id="raw-t3-yes"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Test 4 -->
+      <div class="test-card">
+        <div class="test-header">
+          <div>
+            <h3>4. Cross-Session Merge</h3>
+            <p class="test-desc">Linking knowledge across 3 distinct, previously siloed Agent sessions.</p>
+          </div>
+          <span class="mcp-tool-pill">get_recent_sessions</span>
+        </div>
+
+        <div class="comparison-row">
+          <div class="comp-label">Direct File Access</div>
+          <div class="comp-bar-wrapper"><div id="t4-no-mcp-bar" class="comp-bar-fill bar-no-mcp" style="width: 0%;"></div></div>
+          <div id="t4-no-mcp-val" class="comp-val">-- tokens</div>
+        </div>
+        <div class="comparison-row">
+          <div class="comp-label">MCP Resolution</div>
+          <div class="comp-bar-wrapper"><div id="t4-mcp-bar" class="comp-bar-fill bar-mcp" style="width: 0%;"></div></div>
+          <div id="t4-mcp-val" class="comp-val">-- tokens</div>
+        </div>
+
+        <button class="drilldown-btn" onclick="toggleRawData(4)">View Raw Payload Data</button>
+        <div id="raw-4" class="raw-data-panel">
+          <div class="raw-data-grid">
+            <div class="raw-col">
+              <h4>Direct File Payload</h4>
+              <div id="raw-t4-no"></div>
+            </div>
+            <div class="raw-col">
+              <h4>MCP Payload</h4>
+              <div id="raw-t4-yes"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Test 6 Sliding Window Block -->
+    <div class="feature-test" style="margin-top: 2rem;">
+      <div class="test-header">
+        <div>
+          <h2>6. Sliding Window View (Optimization)</h2>
+          <p class="test-desc">Instead of forcing the agent to ingest the entire timeline (Test 2), the sliding window MCP provides only the most recent N steps. This enables massive context savings while keeping agents focused on current context.</p>
+        </div>
+        <span class="mcp-tool-pill">get_session_timeline_window</span>
+      </div>
+      
+      <div class="test-card" style="margin-top: 1rem;">
+        <div class="comparison-row">
+          <div class="comp-label">Direct File Access (Full Tree)</div>
+          <div class="comp-bar-wrapper"><div id="t6-no-mcp-bar" class="comp-bar-fill bar-no-mcp" style="width: 0%;"></div></div>
+          <div id="t6-no-mcp-val" class="comp-val">-- tokens</div>
+        </div>
+        <div class="comparison-row">
+          <div class="comp-label">MCP Resolution (Window)</div>
+          <div class="comp-bar-wrapper"><div id="t6-mcp-bar" class="comp-bar-fill bar-mcp" style="width: 0%;"></div></div>
+          <div id="t6-mcp-val" class="comp-val">-- tokens</div>
+        </div>
+
+        <button class="drilldown-btn" onclick="toggleRawData(6)">View Raw Payload Data</button>
+        <div id="raw-6" class="raw-data-panel">
+          <div class="raw-data-grid">
+            <div class="raw-col">
+              <h4>Direct File Payload</h4>
+              <div id="raw-t6-no"></div>
+            </div>
+            <div class="raw-col">
+              <h4>MCP Payload</h4>
+              <div id="raw-t6-yes"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Session Graph Visualisation -->
+    <div style="margin-bottom: 4rem; margin-top: 4rem;">
+      <h2 class="section-title">See the Difference: Session Graphs</h2>
+      <p style="text-align: center; color: var(--text-muted); font-size: 1.05rem; max-width: 800px; margin: -1rem auto 2rem auto;">
+        Comparing what the agent has to ingest via Direct File Access vs the Sliding Window MCP. Click nodes to drill down. Use the breadcrumbs to navigate.
+      </p>
+
+      <div style="display: flex; gap: 2rem;">
+        <!-- Left Graph: Full Timeline -->
+        <div style="flex: 1; background: #121614; border-radius: 12px; border: 1px solid var(--border-light); overflow: hidden; box-shadow: var(--shadow-soft); display: flex; flex-direction: column; position: relative;">
+          <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.8rem 1.5rem; background: rgba(18, 22, 20, 0.95); border-bottom: 1px solid rgba(149, 165, 149, 0.15); flex-wrap: wrap;">
+            <span style="font-size: 0.9rem; font-weight: 500; color: #95a595;">Unoptimized (Full Tree)</span>
+            <div id="graph-breadcrumbs-full" style="display: flex; gap: 0.3rem; align-items: center; font-size: 0.75rem; color: #6b6a66; flex: 1; overflow-x: auto;"></div>
+            
+            <button id="graph-play-btn-full" onclick="toggleGraphPlay('full')" style="background: rgba(149,165,149,0.15); border: 1px solid rgba(149,165,149,0.25); color: #95a595; padding: 0.35rem 0.7rem; border-radius: 6px; font-size: 0.8rem; cursor: pointer;">▶ Play</button>
+            <button onclick="setGraphSpeed('full', 1)" style="background: transparent; border: 1px solid rgba(149,165,149,0.25); color: #95a595; padding: 0.35rem 0.5rem; border-radius: 4px; font-size: 0.7rem; cursor: pointer;">1x</button>
+            <button onclick="setGraphSpeed('full', 2)" style="background: transparent; border: 1px solid rgba(149,165,149,0.25); color: #95a595; padding: 0.35rem 0.5rem; border-radius: 4px; font-size: 0.7rem; cursor: pointer;">2x</button>
+            <button onclick="setGraphSpeed('full', 5)" style="background: transparent; border: 1px solid rgba(149,165,149,0.25); color: #95a595; padding: 0.35rem 0.5rem; border-radius: 4px; font-size: 0.7rem; cursor: pointer;">5x</button>
+            <button onclick="promoGraphFull && promoGraphFull.zoomToFit()" style="background: rgba(149,165,149,0.15); border: 1px solid rgba(149,165,149,0.25); color: #95a595; padding: 0.35rem 0.7rem; border-radius: 6px; font-size: 0.8rem; cursor: pointer;">⊞ Fit</button>
+          </div>
+          <div style="position: relative;">
+            <canvas id="promo-graph-canvas-full" width="480" height="420" style="display: block; width: 100%; cursor: grab;"></canvas>
+            <div id="graph-stats-full" style="position: absolute; top: 10px; right: 10px; background: rgba(18,22,20,0.85); padding: 0.8rem; border-radius: 8px; border: 1px solid rgba(149,165,149,0.2); font-size: 0.75rem; color: #db533f; pointer-events: none; backdrop-filter: blur(4px);">
+              <div style="margin-bottom:4px;color:#95a595;font-weight:600;">Cumulative Stats</div>
+              <div>Steps: <span id="stat-steps-full" style="color:#e8ece9;">0</span></div>
+              <div>Thoughts: <span id="stat-thoughts-full" style="color:#e8ece9;">0</span></div>
+              <div>Tools: <span id="stat-tools-full" style="color:#e8ece9;">0</span></div>
+              <div>Tokens: <span id="stat-tokens-full" style="color:#e8ece9;">0</span></div>
+            </div>
+          </div>
+          <div id="graph-node-detail-full" style="display: none; padding: 1rem 1.5rem; background: rgba(18,22,20,0.97); border-top: 1px solid rgba(149,165,149,0.15); font-size: 0.85rem;">
+            <span id="graph-detail-type-full" style="color: #95a595; font-weight: 500;"></span>
+            <span id="graph-detail-content-full" style="color: #8a968f; margin-left: 1rem;"></span>
+            <span id="graph-detail-meta-full" style="font-family: var(--font-mono); font-size: 0.75rem; color: #6b6a66; margin-left: 1rem;"></span>
+          </div>
+        </div>
+
+        <!-- Right Graph: Sliding Window -->
+        <div style="flex: 1; background: #121614; border-radius: 12px; border: 1px solid var(--border-light); overflow: hidden; box-shadow: var(--shadow-soft); display: flex; flex-direction: column; position: relative;">
+          <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.8rem 1.5rem; background: rgba(18, 22, 20, 0.95); border-bottom: 1px solid rgba(149, 165, 149, 0.15); flex-wrap: wrap;">
+            <span style="font-size: 0.9rem; font-weight: 500; color: #db533f;">MCP Sliding Window</span>
+            <div id="graph-breadcrumbs-win" style="display: flex; gap: 0.3rem; align-items: center; font-size: 0.75rem; color: #6b6a66; flex: 1; overflow-x: auto;"></div>
+            
+            <button id="graph-play-btn-win" onclick="toggleGraphPlay('win')" style="background: rgba(149,165,149,0.15); border: 1px solid rgba(149,165,149,0.25); color: #95a595; padding: 0.35rem 0.7rem; border-radius: 6px; font-size: 0.8rem; cursor: pointer;">▶ Play</button>
+            <button onclick="setGraphSpeed('win', 1)" style="background: transparent; border: 1px solid rgba(149,165,149,0.25); color: #95a595; padding: 0.35rem 0.5rem; border-radius: 4px; font-size: 0.7rem; cursor: pointer;">1x</button>
+            <button onclick="setGraphSpeed('win', 2)" style="background: transparent; border: 1px solid rgba(149,165,149,0.25); color: #95a595; padding: 0.35rem 0.5rem; border-radius: 4px; font-size: 0.7rem; cursor: pointer;">2x</button>
+            <button onclick="setGraphSpeed('win', 5)" style="background: transparent; border: 1px solid rgba(149,165,149,0.25); color: #95a595; padding: 0.35rem 0.5rem; border-radius: 4px; font-size: 0.7rem; cursor: pointer;">5x</button>
+            <button onclick="promoGraphWin && promoGraphWin.zoomToFit()" style="background: rgba(149,165,149,0.15); border: 1px solid rgba(149,165,149,0.25); color: #95a595; padding: 0.35rem 0.7rem; border-radius: 6px; font-size: 0.8rem; cursor: pointer;">⊞ Fit</button>
+          </div>
+          <div style="position: relative;">
+            <canvas id="promo-graph-canvas-win" width="480" height="420" style="display: block; width: 100%; cursor: grab;"></canvas>
+            <div id="graph-stats-win" style="position: absolute; top: 10px; right: 10px; background: rgba(18,22,20,0.85); padding: 0.8rem; border-radius: 8px; border: 1px solid rgba(149,165,149,0.2); font-size: 0.75rem; color: #db533f; pointer-events: none; backdrop-filter: blur(4px);">
+              <div style="margin-bottom:4px;color:#95a595;font-weight:600;">Cumulative Stats</div>
+              <div>Steps: <span id="stat-steps-win" style="color:#e8ece9;">0</span></div>
+              <div>Thoughts: <span id="stat-thoughts-win" style="color:#e8ece9;">0</span></div>
+              <div>Tools: <span id="stat-tools-win" style="color:#e8ece9;">0</span></div>
+              <div>Tokens: <span id="stat-tokens-win" style="color:#e8ece9;">0</span></div>
+            </div>
+          </div>
+          <div id="graph-node-detail-win" style="display: none; padding: 1rem 1.5rem; background: rgba(18,22,20,0.97); border-top: 1px solid rgba(149,165,149,0.15); font-size: 0.85rem;">
+            <span id="graph-detail-type-win" style="color: #95a595; font-weight: 500;"></span>
+            <span id="graph-detail-content-win" style="color: #8a968f; margin-left: 1rem;"></span>
+            <span id="graph-detail-meta-win" style="font-family: var(--font-mono); font-size: 0.75rem; color: #6b6a66; margin-left: 1rem;"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Test 5 Feature Block -->
+    <div class="feature-test">
+      <div class="test-header">
+        <div>
+          <h2>5. Skill Extraction & Project Synthesis</h2>
+          <p style="color: var(--text-muted); font-size: 1.05rem; margin-bottom: 1.5rem;">
+            A key capability of an Agent OS is learning from past sessions. How many total steps were taken on a project? What recurring skills or patterns were utilized? 
+            <br><br>
+            Instead of forcing the LLM to read <em>every single historical session JSON</em> to count steps and guess skills (massive context waste), Memo-Ray parses the data locally and serves a clean summary.
+          </p>
+        </div>
+        <span class="mcp-tool-pill" style="margin-top: 0.5rem;">get_project_summary_and_skills</span>
+      </div>
+
+      <div class="comparison-row">
+        <div class="comp-label">Direct File Parsing</div>
+        <div class="comp-bar-wrapper"><div id="t5-no-mcp-bar" class="comp-bar-fill bar-no-mcp" style="width: 0%;"></div></div>
+        <div id="t5-no-mcp-val" class="comp-val">-- tokens</div>
+      </div>
+      <div class="comparison-row">
+        <div class="comp-label">MCP Server Logic</div>
+        <div class="comp-bar-wrapper"><div id="t5-mcp-bar" class="comp-bar-fill bar-mcp" style="width: 0%;"></div></div>
+        <div id="t5-mcp-val" class="comp-val">-- tokens</div>
+      </div>
+
+      <button class="drilldown-btn" onclick="toggleRawData(5)">View Raw Payload Data</button>
+      <div id="raw-5" class="raw-data-panel">
+        <div class="raw-data-grid">
+          <div class="raw-col">
+            <h4>Direct File Payload</h4>
+            <div id="raw-t5-no"></div>
+          </div>
+          <div class="raw-col">
+            <h4>MCP Payload</h4>
+            <div id="raw-t5-yes"></div>
+          </div>
+        </div>
+      </div>
+      
+      <div style="margin-top: 2rem; border-top: 1px solid var(--border-light); padding-top: 1.5rem;">
+        <h4 style="font-family: var(--font-body); margin-bottom: 0.5rem; color: var(--text-main);">Example Extracted Output:</h4>
+        <ul class="skills-list" id="t5-skills-list">
+          <!-- Populated by JS -->
+          <li>Loading skills...</li>
+        </ul>
+      </div>
+
+    </div>
+
+    <!-- Test 5 Graph Visualisation -->
+    <div style="margin-bottom: 4rem; margin-top: 4rem;">
+      <h2 class="section-title">See the Difference: Skill Extraction</h2>
+      <p style="text-align: center; color: var(--text-muted); font-size: 1.05rem; max-width: 800px; margin: -1rem auto 2rem auto;">
+        Comparing the "Data Lake" context injection vs a focused, synthesized MCP response.
+      </p>
+
+      <div style="display: flex; gap: 2rem;">
+        <!-- Left Graph: Data Lake -->
+        <div style="flex: 1; background: #121614; border-radius: 12px; border: 1px solid var(--border-light); overflow: hidden; box-shadow: var(--shadow-soft); display: flex; flex-direction: column; position: relative;">
+          <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.8rem 1.5rem; background: rgba(18, 22, 20, 0.95); border-bottom: 1px solid rgba(149, 165, 149, 0.15); flex-wrap: wrap;">
+            <span style="font-size: 0.9rem; font-weight: 500; color: #95a595;">The Data Lake (~130 files)</span>
+            <div id="graph-breadcrumbs-t5no" style="display: flex; gap: 0.3rem; align-items: center; font-size: 0.75rem; color: #6b6a66; flex: 1; overflow-x: auto;"></div>
+            
+            <button id="graph-play-btn-t5no" onclick="toggleGraphPlay('t5no')" style="background: rgba(149,165,149,0.15); border: 1px solid rgba(149,165,149,0.25); color: #95a595; padding: 0.35rem 0.7rem; border-radius: 6px; font-size: 0.8rem; cursor: pointer;">▶ Play</button>
+            <button onclick="setGraphSpeed('t5no', 1)" style="background: transparent; border: 1px solid rgba(149,165,149,0.25); color: #95a595; padding: 0.35rem 0.5rem; border-radius: 4px; font-size: 0.7rem; cursor: pointer;">1x</button>
+            <button onclick="setGraphSpeed('t5no', 2)" style="background: transparent; border: 1px solid rgba(149,165,149,0.25); color: #95a595; padding: 0.35rem 0.5rem; border-radius: 4px; font-size: 0.7rem; cursor: pointer;">2x</button>
+            <button onclick="setGraphSpeed('t5no', 5)" style="background: transparent; border: 1px solid rgba(149,165,149,0.25); color: #95a595; padding: 0.35rem 0.5rem; border-radius: 4px; font-size: 0.7rem; cursor: pointer;">5x</button>
+            <button onclick="promoGraphT5No && promoGraphT5No.zoomToFit()" style="background: rgba(149,165,149,0.15); border: 1px solid rgba(149,165,149,0.25); color: #95a595; padding: 0.35rem 0.7rem; border-radius: 6px; font-size: 0.8rem; cursor: pointer;">⊞ Fit</button>
+          </div>
+          <div style="position: relative;">
+            <canvas id="promo-graph-canvas-t5no" width="480" height="420" style="display: block; width: 100%; cursor: grab;"></canvas>
+            <div id="graph-stats-t5no" style="position: absolute; top: 10px; right: 10px; background: rgba(18,22,20,0.85); padding: 0.8rem; border-radius: 8px; border: 1px solid rgba(149,165,149,0.2); font-size: 0.75rem; color: #db533f; pointer-events: none; backdrop-filter: blur(4px);">
+              <div style="margin-bottom:4px;color:#95a595;font-weight:600;">Cumulative Stats</div>
+              <div>Sessions Loaded: <span id="stat-steps-t5no" style="color:#e8ece9;">0</span></div>
+              <div>Tokens: <span id="stat-tokens-t5no" style="color:#e8ece9;">0</span></div>
+            </div>
+          </div>
+          <div id="graph-node-detail-t5no" style="display: none; padding: 1rem 1.5rem; background: rgba(18,22,20,0.97); border-top: 1px solid rgba(149,165,149,0.15); font-size: 0.85rem;">
+            <span id="graph-detail-type-t5no" style="color: #95a595; font-weight: 500;"></span>
+            <span id="graph-detail-content-t5no" style="color: #8a968f; margin-left: 1rem;"></span>
+            <span id="graph-detail-meta-t5no" style="font-family: var(--font-mono); font-size: 0.75rem; color: #6b6a66; margin-left: 1rem;"></span>
+          </div>
+        </div>
+
+        <!-- Right Graph: MCP Synthesis -->
+        <div style="flex: 1; background: #121614; border-radius: 12px; border: 1px solid var(--border-light); overflow: hidden; box-shadow: var(--shadow-soft); display: flex; flex-direction: column; position: relative;">
+          <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.8rem 1.5rem; background: rgba(18, 22, 20, 0.95); border-bottom: 1px solid rgba(149, 165, 149, 0.15); flex-wrap: wrap;">
+            <span style="font-size: 0.9rem; font-weight: 500; color: #db533f;">MCP Synthesis</span>
+            <div id="graph-breadcrumbs-t5yes" style="display: flex; gap: 0.3rem; align-items: center; font-size: 0.75rem; color: #6b6a66; flex: 1; overflow-x: auto;"></div>
+            
+            <button id="graph-play-btn-t5yes" onclick="toggleGraphPlay('t5yes')" style="background: rgba(149,165,149,0.15); border: 1px solid rgba(149,165,149,0.25); color: #95a595; padding: 0.35rem 0.7rem; border-radius: 6px; font-size: 0.8rem; cursor: pointer;">▶ Play</button>
+            <button onclick="setGraphSpeed('t5yes', 1)" style="background: transparent; border: 1px solid rgba(149,165,149,0.25); color: #95a595; padding: 0.35rem 0.5rem; border-radius: 4px; font-size: 0.7rem; cursor: pointer;">1x</button>
+            <button onclick="setGraphSpeed('t5yes', 2)" style="background: transparent; border: 1px solid rgba(149,165,149,0.25); color: #95a595; padding: 0.35rem 0.5rem; border-radius: 4px; font-size: 0.7rem; cursor: pointer;">2x</button>
+            <button onclick="setGraphSpeed('t5yes', 5)" style="background: transparent; border: 1px solid rgba(149,165,149,0.25); color: #95a595; padding: 0.35rem 0.5rem; border-radius: 4px; font-size: 0.7rem; cursor: pointer;">5x</button>
+            <button onclick="promoGraphT5Yes && promoGraphT5Yes.zoomToFit()" style="background: rgba(149,165,149,0.15); border: 1px solid rgba(149,165,149,0.25); color: #95a595; padding: 0.35rem 0.7rem; border-radius: 6px; font-size: 0.8rem; cursor: pointer;">⊞ Fit</button>
+          </div>
+          <div style="position: relative;">
+            <canvas id="promo-graph-canvas-t5yes" width="480" height="420" style="display: block; width: 100%; cursor: grab;"></canvas>
+            <div id="graph-stats-t5yes" style="position: absolute; top: 10px; right: 10px; background: rgba(18,22,20,0.85); padding: 0.8rem; border-radius: 8px; border: 1px solid rgba(149,165,149,0.2); font-size: 0.75rem; color: #db533f; pointer-events: none; backdrop-filter: blur(4px);">
+              <div style="margin-bottom:4px;color:#95a595;font-weight:600;">Cumulative Stats</div>
+              <div>Steps: <span id="stat-steps-t5yes" style="color:#e8ece9;">0</span></div>
+              <div>Tools: <span id="stat-tools-t5yes" style="color:#e8ece9;">0</span></div>
+              <div>Tokens: <span id="stat-tokens-t5yes" style="color:#e8ece9;">0</span></div>
+            </div>
+          </div>
+          <div id="graph-node-detail-t5yes" style="display: none; padding: 1rem 1.5rem; background: rgba(18,22,20,0.97); border-top: 1px solid rgba(149,165,149,0.15); font-size: 0.85rem;">
+            <span id="graph-detail-type-t5yes" style="color: #95a595; font-weight: 500;"></span>
+            <span id="graph-detail-content-t5yes" style="color: #8a968f; margin-left: 1rem;"></span>
+            <span id="graph-detail-meta-t5yes" style="font-family: var(--font-mono); font-size: 0.75rem; color: #6b6a66; margin-left: 1rem;"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>
+    <p>Memo-Ray Server • Agent OS Optimization • Anthropic-Style Design Pivot</p>
+  </footer>
+
+  <script src="../scratch/mcp_benchmark_results.js"></script>
+  <script src="graph-renderer.js"></script>
+  <script>
+    let promoGraphFull = null;
+    let promoGraphWin = null;
+    let promoGraphT5No = null;
+    let promoGraphT5Yes = null;
+
+    function getGraphInstance(type) {
+      if (type === 'full') return promoGraphFull;
+      if (type === 'win') return promoGraphWin;
+      if (type === 't5no') return promoGraphT5No;
+      if (type === 't5yes') return promoGraphT5Yes;
+      return null;
+    }
+
+    function toggleRawData(id) {
+      const panel = document.getElementById('raw-' + id);
+      panel.classList.toggle('active');
+    }
+
+    function setGraphSpeed(type, multiplier) {
+      const graph = getGraphInstance(type);
+      if (graph) {
+        graph.setSpeed(multiplier);
+      }
+    }
+
+    function toggleGraphPlay(type) {
+      const graph = getGraphInstance(type);
+      const btn = document.getElementById('graph-play-btn-' + type);
+      if (!graph) return;
+      
+      if (graph.playing) {
+        graph.stop();
+        btn.textContent = '▶ Play';
+        btn.style.color = '#95a595';
+      } else {
+        graph.play();
+        btn.textContent = '⏸ Stop';
+        btn.style.color = '#db533f';
+      }
+    }
+
+    function formatNumber(num) {
+      return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    }
+
+    function escapeHtml(unsafe) {
+      if (!unsafe) return "";
+      return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function renderCard(testData, cardNum) {
+      if (!testData) return;
+      document.getElementById(`t${cardNum}-no-mcp-val`).textContent = formatNumber(testData.noMcp.tokensIn) + " tks";
+      document.getElementById(`t${cardNum}-mcp-val`).textContent = formatNumber(testData.mcp.tokensIn) + " tks";
+      
+      const maxVal = Math.max(testData.noMcp.tokensIn, testData.mcp.tokensIn) || 1;
+      
+      setTimeout(() => {
+        document.getElementById(`t${cardNum}-no-mcp-bar`).style.width = (testData.noMcp.tokensIn / maxVal * 100) + "%";
+        document.getElementById(`t${cardNum}-mcp-bar`).style.width = (testData.mcp.tokensIn / maxVal * 100) + "%";
+      }, 100);
+
+      // Populate Raw Data
+      document.getElementById(`raw-t${cardNum}-no`).innerHTML = escapeHtml(testData.noMcp.rawData);
+      document.getElementById(`raw-t${cardNum}-yes`).innerHTML = escapeHtml(testData.mcp.rawData);
+
+      // Specific logic for Test 5 skills list
+      if (cardNum === 5 && testData.mcp.rawData) {
+        try {
+          const parsed = JSON.parse(testData.mcp.rawData.replace("...\n[TRUNCATED FOR UI DISPLAY]", ""));
+          const list = document.getElementById('t5-skills-list');
+          if (parsed && parsed.extractedSkills) {
+            list.innerHTML = '';
+            list.innerHTML += `<li><strong>Project:</strong> ${parsed.projectName} (${parsed.sessionCount} sessions, ${parsed.totalSteps} steps)</li>`;
+            parsed.extractedSkills.forEach(skill => {
+              list.innerHTML += `<li>Skill Detected: ${skill}</li>`;
+            });
+          }
+        } catch(e) {}
+      }
+    }
+
+    function initGraphFromTestData(runData) {
+      const test2 = runData.tests.find(t => t.testId === 2);
+      const test6 = runData.tests.find(t => t.testId === 6);
+      
+      // Init Full Graph (Test 2)
+      if (test2 && test2.mcp.timelineEvents) {
+        const events = test2.mcp.timelineEvents;
+        const nodes = events.map((ev, i) => ({
+          id: 'evt-' + i, type: ev.type, agent: ev.agent, label: ev.type, timestamp: ev.timestamp,
+          val: Math.max(4, Math.min(16, Math.sqrt(ev.tokens || 100))), tokens: ev.tokens || 0, sizeBytes: ev.sizeBytes || 0, metadata: {}
+        }));
+        const links = [];
+        for (let i = 1; i < nodes.length; i++) links.push({ source: nodes[i - 1].id, target: nodes[i].id });
+
+        const canvasFull = document.getElementById('promo-graph-canvas-full');
+        if (canvasFull) {
+          promoGraphFull = new MemoRayGraph(canvasFull, { nodes, links }, {
+            bgColor: '#121614', animateOnLoad: true,
+            onBreadcrumbChange: (crumbs) => {
+              document.getElementById('graph-breadcrumbs-full').innerHTML = crumbs.map((c, i) =>
+                (i > 0 ? '<span style="color:#4a4a46;margin:0 2px;">→</span>' : '') +
+                '<span style="background:rgba(149,165,149,' + (i === crumbs.length - 1 ? '0.3' : '0.1') + ');padding:0.2rem 0.5rem;border-radius:4px;cursor:pointer;white-space:nowrap;' + (i === crumbs.length - 1 ? 'color:#db533f;' : '') + '" onclick="promoGraphFull.selectNode(\'' + c.id + '\')">' + c.type + '</span>'
+              ).join('');
+            },
+            onNodeSelect: (node) => {
+              document.getElementById('graph-node-detail-full').style.display = 'block';
+              document.getElementById('graph-detail-type-full').textContent = node.type + ' — ' + node.agent;
+              document.getElementById('graph-detail-content-full').textContent = node.label || '';
+              document.getElementById('graph-detail-meta-full').textContent = 'Tokens: ' + node.tokens + ' | Size: ' + node.sizeBytes + ' bytes';
+            },
+            onPlaybackStatsChange: (stats) => {
+              document.getElementById('stat-steps-full').textContent = stats.steps;
+              document.getElementById('stat-thoughts-full').textContent = stats.thoughts;
+              document.getElementById('stat-tools-full').textContent = stats.toolCalls;
+              document.getElementById('stat-tokens-full').textContent = formatNumber(stats.tokens);
+            }
+          });
+          setTimeout(() => promoGraphFull && promoGraphFull.zoomToFit(), 2500);
+        }
+      }
+
+      // Init Window Graph (Test 6)
+      if (test6 && test6.mcp.timelineEvents) {
+        const events = test6.mcp.timelineEvents;
+        const nodes = events.map((ev, i) => ({
+          id: 'win-' + i, type: ev.type, agent: ev.agent, label: ev.type, timestamp: ev.timestamp,
+          val: Math.max(4, Math.min(16, Math.sqrt(ev.tokens || 100))), tokens: ev.tokens || 0, sizeBytes: ev.sizeBytes || 0, metadata: {}
+        }));
+        const links = [];
+        for (let i = 1; i < nodes.length; i++) links.push({ source: nodes[i - 1].id, target: nodes[i].id });
+
+        const canvasWin = document.getElementById('promo-graph-canvas-win');
+        if (canvasWin) {
+          promoGraphWin = new MemoRayGraph(canvasWin, { nodes, links }, {
+            bgColor: '#121614', animateOnLoad: true,
+            onBreadcrumbChange: (crumbs) => {
+              document.getElementById('graph-breadcrumbs-win').innerHTML = crumbs.map((c, i) =>
+                (i > 0 ? '<span style="color:#4a4a46;margin:0 2px;">→</span>' : '') +
+                '<span style="background:rgba(149,165,149,' + (i === crumbs.length - 1 ? '0.3' : '0.1') + ');padding:0.2rem 0.5rem;border-radius:4px;cursor:pointer;white-space:nowrap;' + (i === crumbs.length - 1 ? 'color:#db533f;' : '') + '" onclick="promoGraphWin.selectNode(\'' + c.id + '\')">' + c.type + '</span>'
+              ).join('');
+            },
+            onNodeSelect: (node) => {
+              document.getElementById('graph-node-detail-win').style.display = 'block';
+              document.getElementById('graph-detail-type-win').textContent = node.type + ' — ' + node.agent;
+              document.getElementById('graph-detail-content-win').textContent = node.label || '';
+              document.getElementById('graph-detail-meta-win').textContent = 'Tokens: ' + node.tokens + ' | Size: ' + node.sizeBytes + ' bytes';
+            },
+            onPlaybackStatsChange: (stats) => {
+              document.getElementById('stat-steps-win').textContent = stats.steps;
+              document.getElementById('stat-thoughts-win').textContent = stats.thoughts;
+              document.getElementById('stat-tools-win').textContent = stats.toolCalls;
+              document.getElementById('stat-tokens-win').textContent = formatNumber(stats.tokens);
+            }
+          });
+          setTimeout(() => promoGraphWin && promoGraphWin.zoomToFit(), 2500);
+        }
+      }
+
+      // Init Test 5 Graphs
+      const test5 = runData.tests.find(t => t.testId === 5);
+      if (test5) {
+        // T5 No MCP
+        if (test5.noMcp.timelineEvents) {
+          const events = test5.noMcp.timelineEvents;
+          const nodes = events.map((ev, i) => ({
+            id: 't5n-' + i, type: ev.type, agent: ev.agent, label: ev.type, timestamp: ev.timestamp,
+            val: Math.max(4, Math.min(16, Math.sqrt(ev.tokens || 100))), tokens: ev.tokens || 0, sizeBytes: ev.sizeBytes || 0, metadata: {}
+          }));
+          const links = [];
+          for (let i = 1; i < nodes.length; i++) links.push({ source: nodes[i - 1].id, target: nodes[i].id });
+
+          const canvasT5No = document.getElementById('promo-graph-canvas-t5no');
+          if (canvasT5No) {
+            promoGraphT5No = new MemoRayGraph(canvasT5No, { nodes, links }, {
+              bgColor: '#121614', animateOnLoad: true,
+              onBreadcrumbChange: (crumbs) => {
+                document.getElementById('graph-breadcrumbs-t5no').innerHTML = crumbs.map((c, i) =>
+                  (i > 0 ? '<span style="color:#4a4a46;margin:0 2px;">→</span>' : '') +
+                  '<span style="background:rgba(149,165,149,' + (i === crumbs.length - 1 ? '0.3' : '0.1') + ');padding:0.2rem 0.5rem;border-radius:4px;cursor:pointer;white-space:nowrap;' + (i === crumbs.length - 1 ? 'color:#db533f;' : '') + '" onclick="promoGraphT5No.selectNode(\'' + c.id + '\')">' + c.type + '</span>'
+                ).join('');
+              },
+              onNodeSelect: (node) => {
+                document.getElementById('graph-node-detail-t5no').style.display = 'block';
+                document.getElementById('graph-detail-type-t5no').textContent = node.type + ' — ' + node.agent;
+                document.getElementById('graph-detail-content-t5no').textContent = node.label || '';
+                document.getElementById('graph-detail-meta-t5no').textContent = 'Tokens: ' + node.tokens + ' | Size: ' + node.sizeBytes + ' bytes';
+              },
+              onPlaybackStatsChange: (stats) => {
+                document.getElementById('stat-steps-t5no').textContent = stats.steps;
+                document.getElementById('stat-tokens-t5no').textContent = formatNumber(stats.tokens);
+              }
+            });
+            setTimeout(() => promoGraphT5No && promoGraphT5No.zoomToFit(), 2500);
+          }
+        }
+
+        // T5 With MCP
+        if (test5.mcp.timelineEvents) {
+          const events = test5.mcp.timelineEvents;
+          const nodes = events.map((ev, i) => ({
+            id: 't5y-' + i, type: ev.type, agent: ev.agent, label: ev.type, timestamp: ev.timestamp,
+            val: Math.max(4, Math.min(16, Math.sqrt(ev.tokens || 100))), tokens: ev.tokens || 0, sizeBytes: ev.sizeBytes || 0, metadata: {}
+          }));
+          const links = [];
+          for (let i = 1; i < nodes.length; i++) links.push({ source: nodes[i - 1].id, target: nodes[i].id });
+
+          const canvasT5Yes = document.getElementById('promo-graph-canvas-t5yes');
+          if (canvasT5Yes) {
+            promoGraphT5Yes = new MemoRayGraph(canvasT5Yes, { nodes, links }, {
+              bgColor: '#121614', animateOnLoad: true,
+              onBreadcrumbChange: (crumbs) => {
+                document.getElementById('graph-breadcrumbs-t5yes').innerHTML = crumbs.map((c, i) =>
+                  (i > 0 ? '<span style="color:#4a4a46;margin:0 2px;">→</span>' : '') +
+                  '<span style="background:rgba(149,165,149,' + (i === crumbs.length - 1 ? '0.3' : '0.1') + ');padding:0.2rem 0.5rem;border-radius:4px;cursor:pointer;white-space:nowrap;' + (i === crumbs.length - 1 ? 'color:#db533f;' : '') + '" onclick="promoGraphT5Yes.selectNode(\'' + c.id + '\')">' + c.type + '</span>'
+                ).join('');
+              },
+              onNodeSelect: (node) => {
+                document.getElementById('graph-node-detail-t5yes').style.display = 'block';
+                document.getElementById('graph-detail-type-t5yes').textContent = node.type + ' — ' + node.agent;
+                document.getElementById('graph-detail-content-t5yes').textContent = node.label || '';
+                document.getElementById('graph-detail-meta-t5yes').textContent = 'Tokens: ' + node.tokens + ' | Size: ' + node.sizeBytes + ' bytes';
+              },
+              onPlaybackStatsChange: (stats) => {
+                document.getElementById('stat-steps-t5yes').textContent = stats.steps;
+                document.getElementById('stat-tools-t5yes').textContent = stats.toolCalls;
+                document.getElementById('stat-tokens-t5yes').textContent = formatNumber(stats.tokens);
+              }
+            });
+            setTimeout(() => promoGraphT5Yes && promoGraphT5Yes.zoomToFit(), 2500);
+          }
+        }
+      }
+    }
+
+    function initApp() {
+      const data = window.mcpBenchmarkData;
+      if (!data || !data.runs || data.runs.length === 0) return;
+      
+      const runData = data.runs[0];
+      if (!runData) return;
+
+      renderCard(runData.tests.find(t => t.testId === 1), 1);
+      renderCard(runData.tests.find(t => t.testId === 2), 2);
+      renderCard(runData.tests.find(t => t.testId === 3), 3);
+      renderCard(runData.tests.find(t => t.testId === 4), 4);
+      renderCard(runData.tests.find(t => t.testId === 5), 5);
+      renderCard(runData.tests.find(t => t.testId === 6), 6);
+
+      // Initialise the graph canvases
+      initGraphFromTestData(runData);
+    }
+
+    window.onload = initApp;
+  </script>
+</body>
+</html>
+

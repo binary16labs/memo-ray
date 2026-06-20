@@ -1,0 +1,14 @@
+{
+  "name": "memoray-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server exposing Memo-Ray session memory to AI agents",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.6.0"
+  }
+}

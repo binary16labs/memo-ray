@@ -9,6 +9,7 @@
     "build:client": "npm run build --prefix agent-os-dashboard/client",
     "build:server": "npm install --prefix agent-os-dashboard/server",
     "build": "npm run build:client && npm run build:server",
+    "mcp": "npm run start --prefix mcp-server",
     "package": "pkg . --out-path dist && node scripts/inject-icon.js"
   },
   "pkg": {
