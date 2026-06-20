@@ -13,6 +13,8 @@ const { lockedPort } = require('./lib/registry');
 
 const { syncClaude, getActiveSessions } = require('./parsers/claudeParser');
 const { syncAntigravity } = require('./parsers/antigravityParser');
+const { syncOpencode } = require('./parsers/opencodeParser');
+const { syncOpenNotebook } = require('./parsers/openNotebookParser');
 const store = require('./lib/entity_store');
 
 const app = express();
@@ -64,6 +66,8 @@ async function performSync() {
     try {
         await syncClaude();
         await syncAntigravity();
+        await syncOpencode();
+        await syncOpenNotebook();
         store.invalidate();
         console.log('[Server] Delta sync completed successfully.');
     } catch (e) {
@@ -96,7 +100,8 @@ app.post('/api/config', (req, res) => {
             'CLAUDE_SESSIONS_DIR': newConfig.CLAUDE_SESSIONS_DIR,
             'CLAUDE_WORKTREES_PATH': newConfig.CLAUDE_WORKTREES_PATH,
             'CLAUDE_CONFIG_PATH': newConfig.CLAUDE_CONFIG_PATH,
-            'GEMINI_CONFIG_DIR': newConfig.GEMINI_CONFIG_DIR
+            'GEMINI_CONFIG_DIR': newConfig.GEMINI_CONFIG_DIR,
+            'OPENCODE_CONFIG_PATH': newConfig.OPENCODE_CONFIG_PATH
         };
 
         for (const [key, val] of Object.entries(updates)) {
@@ -108,7 +113,8 @@ app.post('/api/config', (req, res) => {
         
         const arrayUpdates = {
             'CLAUDE_LOG_DIRS': newConfig.CLAUDE_LOG_DIRS,
-            'ANTIGRAVITY_BRAIN_DIRS': newConfig.ANTIGRAVITY_BRAIN_DIRS
+            'ANTIGRAVITY_BRAIN_DIRS': newConfig.ANTIGRAVITY_BRAIN_DIRS,
+            'OPENCODE_STORAGE_DIRS': newConfig.OPENCODE_STORAGE_DIRS
         };
 
         for (const [key, val] of Object.entries(arrayUpdates)) {
@@ -173,7 +179,9 @@ module.exports = {
     CLAUDE_WORKTREES_PATH: ${formatValue(newConfig.CLAUDE_WORKTREES_PATH)},
     CLAUDE_CONFIG_PATH: ${formatValue(newConfig.CLAUDE_CONFIG_PATH)},
     ANTIGRAVITY_BRAIN_DIRS: ${formatValue(newConfig.ANTIGRAVITY_BRAIN_DIRS)},
-    GEMINI_CONFIG_DIR: ${formatValue(newConfig.GEMINI_CONFIG_DIR)}
+    GEMINI_CONFIG_DIR: ${formatValue(newConfig.GEMINI_CONFIG_DIR)},
+    OPENCODE_STORAGE_DIRS: ${formatValue(newConfig.OPENCODE_STORAGE_DIRS || [])},
+    OPENCODE_CONFIG_PATH: ${formatValue(newConfig.OPENCODE_CONFIG_PATH || '')}
 };
 `;
         fs.writeFileSync(configPath, content, 'utf8');
@@ -650,7 +658,7 @@ app.get('/api/beta/overview', (req, res) => {
     const { entities, index } = store.load();
 
     const projects = {};
-    const agentSummary = { claude: { sessions: 0, nodes: 0, tokens: 0, files: 0 }, antigravity: { sessions: 0, nodes: 0, tokens: 0, files: 0 } };
+    const agentSummary = { claude: { sessions: 0, nodes: 0, tokens: 0, files: 0 }, antigravity: { sessions: 0, nodes: 0, tokens: 0, files: 0 }, opencode: { sessions: 0, nodes: 0, tokens: 0, files: 0 }, opennotebook: { sessions: 0, nodes: 0, tokens: 0, files: 0 } };
     const fileEditCounts = new Map();
 
     // Build file interaction map
@@ -842,15 +850,18 @@ app.get('/api/beta/overview', (req, res) => {
     // Count unique files per agent
     const claudeFiles = new Set();
     const antiFiles = new Set();
+    const opencodeFiles = new Set();
     for (const e of entities.values()) {
         if (e.metadata?.filePath) {
             const key = e.metadata.filePath.toLowerCase();
             if (e.agent === 'Claude') claudeFiles.add(key);
             else if (e.agent === 'Antigravity') antiFiles.add(key);
+            else if (e.agent === 'Opencode') opencodeFiles.add(key);
         }
     }
     agentSummary.claude.files = claudeFiles.size;
     agentSummary.antigravity.files = antiFiles.size;
+    agentSummary.opencode.files = opencodeFiles.size;
 
     // Active sessions from Claude Code
     const activeSessions = getActiveSessions();
@@ -864,8 +875,8 @@ app.get('/api/beta/overview', (req, res) => {
         totalSessions: (index.sessions || []).length,
         totalNodes: entities.size,
         totalFiles: fileEditCounts.size,
-        totalTokens: agentSummary.claude.tokens + agentSummary.antigravity.tokens,
-        lastSync: index.claude_last_sync_timestamp || index.antigravity_last_sync_timestamp || null
+        totalTokens: agentSummary.claude.tokens + agentSummary.antigravity.tokens + agentSummary.opencode.tokens,
+        lastSync: index.claude_last_sync_timestamp || index.antigravity_last_sync_timestamp || index.opencode_last_sync_timestamp || index.open_notebook_last_sync_timestamp || null
     });
 });
 
@@ -1103,6 +1114,22 @@ app.get('/api/system/capabilities', async (req, res) => {
                 maxContextTokens: 2000000,
                 plugins: [],
                 permissions: []
+            },
+            opencode: {
+                providers: [],
+                models: [],
+                defaultModel: null,
+                smallModel: null,
+                mcpServers: [],
+                permissions: {}
+            },
+            openNotebook: {
+                reachable: false,
+                providersAvailable: [],
+                providersConfigured: [],
+                models: [],
+                transformations: [],
+                encryptionConfigured: false
             }
         };
 
@@ -1142,6 +1169,102 @@ app.get('/api/system/capabilities', async (req, res) => {
             }
         } catch (e) {
             console.error('Failed to parse Antigravity config:', e.message);
+        }
+
+        // 3. Read opencode providers, models, MCP servers & permission grants.
+        //    This is the per-agent audit of what opencode is allowed to do.
+        const opencodeConfigPath = config.OPENCODE_CONFIG_PATH
+            || path.join(os.homedir(), '.config', 'opencode', 'opencode.json');
+        try {
+            if (fs.existsSync(opencodeConfigPath)) {
+                const oc = JSON.parse(fs.readFileSync(opencodeConfigPath, 'utf8'));
+
+                if (oc.provider && typeof oc.provider === 'object') {
+                    capabilities.opencode.providers = Object.keys(oc.provider).map(pid => ({
+                        id: pid,
+                        name: oc.provider[pid]?.name || pid,
+                        baseURL: oc.provider[pid]?.options?.baseURL || null
+                    }));
+                    for (const pid of Object.keys(oc.provider)) {
+                        const models = oc.provider[pid]?.models || {};
+                        for (const mid of Object.keys(models)) {
+                            capabilities.opencode.models.push({
+                                provider: pid,
+                                id: mid,
+                                name: models[mid]?.name || mid,
+                                contextLimit: models[mid]?.limit?.context || null
+                            });
+                        }
+                    }
+                }
+
+                capabilities.opencode.defaultModel = oc.model || null;
+                capabilities.opencode.smallModel = oc.small_model || null;
+
+                // MCP servers opencode is wired to (local or remote)
+                if (oc.mcp && typeof oc.mcp === 'object') {
+                    capabilities.opencode.mcpServers = Object.keys(oc.mcp).map(name => ({
+                        name,
+                        type: oc.mcp[name]?.type || null,
+                        command: Array.isArray(oc.mcp[name]?.command)
+                            ? oc.mcp[name].command.join(' ')
+                            : (oc.mcp[name]?.command || oc.mcp[name]?.url || null)
+                    }));
+                }
+
+                // Permission grants (edit/bash/webfetch → allow|ask|deny).
+                // Absent means opencode runs with its built-in defaults.
+                if (oc.permission && typeof oc.permission === 'object') {
+                    capabilities.opencode.permissions = oc.permission;
+                }
+            }
+        } catch (e) {
+            console.error('Failed to parse opencode config:', e.message);
+        }
+
+        // 4. Audit open-notebook over its REST API: providers it can reach,
+        //    configured models, and the AI operations (transformations) it can
+        //    run against your documents. Bounded so a down service can't hang us.
+        const onBase = (process.env.MEMORAY_OPEN_NOTEBOOK_URL
+            || config.OPEN_NOTEBOOK_API_URL
+            || 'http://localhost:5055').replace(/\/+$/, '');
+        const onGet = async (p, timeoutMs = 1500) => {
+            const ctrl = new AbortController();
+            const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+            try {
+                const r = await fetch(`${onBase}${p}`, { signal: ctrl.signal });
+                return r.ok ? await r.json() : null;
+            } catch { return null; } finally { clearTimeout(timer); }
+        };
+        try {
+            const providers = await onGet('/api/models/providers');
+            if (providers) {
+                capabilities.openNotebook.reachable = true;
+                capabilities.openNotebook.providersAvailable = providers.available || [];
+            }
+            const credStatus = await onGet('/api/credentials/status');
+            if (credStatus?.configured) {
+                capabilities.openNotebook.reachable = true;
+                capabilities.openNotebook.providersConfigured = Object.entries(credStatus.configured)
+                    .filter(([, v]) => v).map(([k]) => k);
+                capabilities.openNotebook.encryptionConfigured = !!credStatus.encryption_configured;
+            }
+            const models = await onGet('/api/models');
+            if (Array.isArray(models)) {
+                capabilities.openNotebook.reachable = true;
+                capabilities.openNotebook.models = models.map(m => ({
+                    id: m.id, name: m.name || m.id, provider: m.provider || null, type: m.type || null
+                }));
+            }
+            const transformations = await onGet('/api/transformations');
+            if (Array.isArray(transformations)) {
+                capabilities.openNotebook.reachable = true;
+                capabilities.openNotebook.transformations = transformations.map(t => ({
+                    name: t.name, title: t.title || t.name, applyDefault: !!t.apply_default
+                }));
+            }
+        } catch (e) {
+            console.error('Failed to audit open-notebook:', e.message);
         }
 
         res.json(capabilities);

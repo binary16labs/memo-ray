@@ -11,7 +11,9 @@ export default function SetupWizard({ API, onComplete }) {
     CLAUDE_WORKTREES_PATH: '',
     CLAUDE_CONFIG_PATH: '',
     ANTIGRAVITY_BRAIN_DIRS: '',
-    GEMINI_CONFIG_DIR: ''
+    GEMINI_CONFIG_DIR: '',
+    OPENCODE_STORAGE_DIRS: '',
+    OPENCODE_CONFIG_PATH: ''
   });
   const [saving, setSaving] = useState(false);
   const [showTroubleshoot, setShowTroubleshoot] = useState({});
@@ -39,7 +41,11 @@ export default function SetupWizard({ API, onComplete }) {
           ANTIGRAVITY_BRAIN_DIRS: Array.isArray(data.results.ANTIGRAVITY_BRAIN_DIRS.value)
             ? data.results.ANTIGRAVITY_BRAIN_DIRS.value.join('\n')
             : data.results.ANTIGRAVITY_BRAIN_DIRS.value || '',
-          GEMINI_CONFIG_DIR: data.results.GEMINI_CONFIG_DIR.value || ''
+          GEMINI_CONFIG_DIR: data.results.GEMINI_CONFIG_DIR.value || '',
+          OPENCODE_STORAGE_DIRS: Array.isArray(data.results.OPENCODE_STORAGE_DIRS?.value)
+            ? data.results.OPENCODE_STORAGE_DIRS.value.join('\n')
+            : data.results.OPENCODE_STORAGE_DIRS?.value || '',
+          OPENCODE_CONFIG_PATH: data.results.OPENCODE_CONFIG_PATH?.value || ''
         });
         setLoading(false);
       })
@@ -60,7 +66,9 @@ export default function SetupWizard({ API, onComplete }) {
       CLAUDE_WORKTREES_PATH: form.CLAUDE_WORKTREES_PATH.trim(),
       CLAUDE_CONFIG_PATH: form.CLAUDE_CONFIG_PATH.trim(),
       ANTIGRAVITY_BRAIN_DIRS: form.ANTIGRAVITY_BRAIN_DIRS.split('\n').map(p => p.trim()).filter(Boolean),
-      GEMINI_CONFIG_DIR: form.GEMINI_CONFIG_DIR.trim()
+      GEMINI_CONFIG_DIR: form.GEMINI_CONFIG_DIR.trim(),
+      OPENCODE_STORAGE_DIRS: form.OPENCODE_STORAGE_DIRS.split('\n').map(p => p.trim()).filter(Boolean),
+      OPENCODE_CONFIG_PATH: form.OPENCODE_CONFIG_PATH.trim()
     };
 
     fetch(`${API}/setup/save`, {
@@ -136,7 +144,9 @@ export default function SetupWizard({ API, onComplete }) {
     { key: 'CLAUDE_WORKTREES_PATH', label: 'Claude Worktrees Track File', isArray: false },
     { key: 'CLAUDE_CONFIG_PATH', label: 'Claude Desktop Configuration File', isArray: false },
     { key: 'ANTIGRAVITY_BRAIN_DIRS', label: 'Antigravity IDE Brain Directories', isArray: true },
-    { key: 'GEMINI_CONFIG_DIR', label: 'Gemini Agent Config Directory', isArray: false }
+    { key: 'GEMINI_CONFIG_DIR', label: 'Gemini Agent Config Directory', isArray: false },
+    { key: 'OPENCODE_STORAGE_DIRS', label: 'opencode Storage Directories', isArray: true },
+    { key: 'OPENCODE_CONFIG_PATH', label: 'opencode Configuration File', isArray: false }
   ];
 
   return (

@@ -38,6 +38,14 @@ const PROBE_LISTS = {
     ],
     GEMINI_CONFIG_DIR: [
         path.join(home, '.gemini', 'config')
+    ],
+    OPENCODE_STORAGE_DIRS: [
+        path.join(home, '.local', 'share', 'opencode', 'storage'),
+        path.join(home, '.config', 'opencode', 'storage')
+    ],
+    OPENCODE_CONFIG_PATH: [
+        path.join(home, '.config', 'opencode', 'opencode.json'),
+        path.join(home, '.local', 'share', 'opencode', 'opencode.json')
     ]
 };
 
@@ -48,7 +56,9 @@ const GUIDES = {
     CLAUDE_WORKTREES_PATH: "JSON file created by Claude Code to track active git worktrees. Generated automatically when you create a new workspace in Claude.",
     CLAUDE_CONFIG_PATH: "Claude Desktop configuration file. Required to analyze active tools and MCP servers.",
     ANTIGRAVITY_BRAIN_DIRS: "Folder where Antigravity (Gemini IDE plugin) saves conversation trajectories. Ensure Antigravity pair programming has run at least once in your editor.",
-    GEMINI_CONFIG_DIR: "Configuration folder for Gemini developer skills and global permissions."
+    GEMINI_CONFIG_DIR: "Configuration folder for Gemini developer skills and global permissions.",
+    OPENCODE_STORAGE_DIRS: "Folder where opencode saves its session/message/part JSON tree. Created under ~/.local/share/opencode/storage after you run opencode at least once.",
+    OPENCODE_CONFIG_PATH: "opencode configuration file (providers, models, MCP servers, permissions). Normally ~/.config/opencode/opencode.json. Required to audit what opencode is allowed to do."
 };
 
 function detectSinglePath(key, userValue) {
@@ -142,8 +152,8 @@ function detectPaths(userConfig = {}) {
     const results = {};
     let isComplete = true;
     
-    const singleKeys = ['CLAUDE_SESSIONS_DIR', 'CLAUDE_WORKTREES_PATH', 'CLAUDE_CONFIG_PATH', 'GEMINI_CONFIG_DIR'];
-    const arrayKeys = ['CLAUDE_LOG_DIRS', 'ANTIGRAVITY_BRAIN_DIRS'];
+    const singleKeys = ['CLAUDE_SESSIONS_DIR', 'CLAUDE_WORKTREES_PATH', 'CLAUDE_CONFIG_PATH', 'GEMINI_CONFIG_DIR', 'OPENCODE_CONFIG_PATH'];
+    const arrayKeys = ['CLAUDE_LOG_DIRS', 'ANTIGRAVITY_BRAIN_DIRS', 'OPENCODE_STORAGE_DIRS'];
     
     for (const key of singleKeys) {
         results[key] = detectSinglePath(key, userConfig[key]);
@@ -161,7 +171,8 @@ function detectPaths(userConfig = {}) {
         results[key] = detectArrayPaths(key, userConfig[key]);
         results[key].guide = GUIDES[key];
         // Log folders or Antigravity directories are critical. If both log dirs and brain dirs are missing, setup is incomplete.
-        if (!results[key].exists) {
+        // opencode is an optional third agent — its absence never blocks setup.
+        if (!results[key].exists && key !== 'OPENCODE_STORAGE_DIRS') {
             isComplete = false;
         }
     }

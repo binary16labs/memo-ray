@@ -307,6 +307,75 @@ export default function OverviewGrid({ onSelectSession }) {
                 </div>
               </div>
 
+              {/* opencode capabilities & permission audit */}
+              <div style={{ flex: 1 }}>
+                <h4 style={{ color: 'var(--moss)', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ background: 'rgba(120, 148, 110, 0.12)', padding: '0.2rem 0.6rem', borderRadius: 'var(--radius-sm)' }}>opencode (local)</span>
+                </h4>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.8rem' }}>
+                  {capabilities.opencode?.models?.length > 0 ? capabilities.opencode.models.map(m => (
+                    <div key={`${m.provider}:${m.id}`} style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', padding: '0.4rem 0.8rem', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', fontSize: '0.85rem', display: 'flex', flexDirection: 'column' }}>
+                      <strong>{m.name}</strong>
+                      <span style={{ color: 'var(--text-tertiary)', fontSize: '0.72rem', fontFamily: 'monospace' }}>
+                        {m.provider}{m.contextLimit ? ` · ${(m.contextLimit / 1000).toFixed(0)}k ctx` : ''}
+                      </span>
+                    </div>
+                  )) : <span style={{ color: 'var(--text-tertiary)' }}>opencode not configured.</span>}
+                </div>
+                {/* MCP servers (if any) */}
+                {capabilities.opencode?.mcpServers?.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '0.8rem' }}>
+                    {capabilities.opencode.mcpServers.map(mcp => (
+                      <span key={mcp.name} style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', padding: '0.3rem 0.6rem', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', fontSize: '0.75rem' }}>MCP: {mcp.name}</span>
+                    ))}
+                  </div>
+                )}
+                {/* Permission grants — the "what is it allowed to do" audit */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                  {capabilities.opencode && Object.keys(capabilities.opencode.permissions || {}).length > 0
+                    ? Object.entries(capabilities.opencode.permissions).map(([action, grant]) => {
+                        const g = typeof grant === 'string' ? grant : 'configured';
+                        const color = g === 'deny' ? 'var(--rust)' : g === 'ask' ? 'var(--golden)' : 'var(--moss)';
+                        return (
+                          <div key={action} style={{ background: 'var(--bg-deep)', border: `1px solid ${color}`, padding: '0.3rem 0.6rem', borderRadius: 'var(--radius-sm)', fontSize: '0.75rem', display: 'flex', flexDirection: 'column' }}>
+                            <span style={{ color, fontSize: '0.65rem', textTransform: 'uppercase' }}>{g}</span>
+                            <span style={{ fontFamily: 'monospace', color: 'var(--text-primary)' }}>{action}</span>
+                          </div>
+                        );
+                      })
+                    : <span style={{ color: 'var(--text-tertiary)', fontSize: '0.8rem' }}>Default permissions (no explicit grants).</span>}
+                </div>
+              </div>
+
+              {/* open-notebook capabilities & AI-operation audit */}
+              <div style={{ flex: 1 }}>
+                <h4 style={{ color: 'var(--taupe)', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ background: 'rgba(170, 150, 130, 0.12)', padding: '0.2rem 0.6rem', borderRadius: 'var(--radius-sm)' }}>
+                    open-notebook {capabilities.openNotebook?.reachable ? '' : '(offline)'}
+                  </span>
+                </h4>
+                {/* AI operations it can run against your documents */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '0.8rem' }}>
+                  {capabilities.openNotebook?.transformations?.length > 0 ? capabilities.openNotebook.transformations.map(t => (
+                    <span key={t.name} title={t.applyDefault ? 'Runs by default' : ''} style={{ background: 'var(--bg-deep)', border: `1px solid ${t.applyDefault ? 'var(--moss)' : 'var(--border-subtle)'}`, padding: '0.3rem 0.6rem', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', fontSize: '0.78rem' }}>
+                      {t.title}{t.applyDefault ? ' ★' : ''}
+                    </span>
+                  )) : <span style={{ color: 'var(--text-tertiary)', fontSize: '0.8rem' }}>{capabilities.openNotebook?.reachable ? 'No AI operations.' : 'Service not reachable.'}</span>}
+                </div>
+                {/* Provider / credential status */}
+                {capabilities.openNotebook?.reachable && (
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)' }}>
+                    Models: <strong style={{ color: 'var(--text-primary)' }}>{capabilities.openNotebook.models?.length || 0}</strong>
+                    {' · '}Providers configured: <strong style={{ color: capabilities.openNotebook.providersConfigured?.length ? 'var(--moss)' : 'var(--text-primary)' }}>
+                      {capabilities.openNotebook.providersConfigured?.length || 0}
+                    </strong>
+                    {' · '}Encryption: <strong style={{ color: capabilities.openNotebook.encryptionConfigured ? 'var(--moss)' : 'var(--rust)' }}>
+                      {capabilities.openNotebook.encryptionConfigured ? 'on' : 'off'}
+                    </strong>
+                  </div>
+                )}
+              </div>
+
             </div>
           ) : (
             <div style={{ color: 'var(--text-secondary)' }}>Scanning registries...</div>

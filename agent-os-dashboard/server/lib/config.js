@@ -41,7 +41,16 @@ module.exports = {
     ANTIGRAVITY_BRAIN_DIRS: ${formatValue(detected.ANTIGRAVITY_BRAIN_DIRS.value)},
 
     // Directory for Gemini Agent plugins and core configuration
-    GEMINI_CONFIG_DIR: ${formatValue(detected.GEMINI_CONFIG_DIR.value)}
+    GEMINI_CONFIG_DIR: ${formatValue(detected.GEMINI_CONFIG_DIR.value)},
+
+    // Directories where opencode stores its session/message/part JSON tree
+    OPENCODE_STORAGE_DIRS: ${formatValue(detected.OPENCODE_STORAGE_DIRS.value)},
+
+    // Path to the opencode config (providers, models, MCP servers, permissions)
+    OPENCODE_CONFIG_PATH: ${formatValue(detected.OPENCODE_CONFIG_PATH.value)},
+
+    // Base URL of the open-notebook FastAPI REST API (docker-compose default)
+    OPEN_NOTEBOOK_API_URL: "http://localhost:5055"
 };
 `;
 }

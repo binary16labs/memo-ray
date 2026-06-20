@@ -57,5 +57,35 @@ module.exports = {
     ],
 
     // Directory for Gemini Agent plugins and core configuration
-    GEMINI_CONFIG_DIR: path.join(home, '.gemini', 'config')
+    GEMINI_CONFIG_DIR: path.join(home, '.gemini', 'config'),
+
+
+    // ------------------------------------------------------------------------
+    // OPENCODE CONFIGURATION
+    // ------------------------------------------------------------------------
+    // opencode (sst/opencode) is a local-first coding agent. It stores each
+    // session as a tree of JSON files under a `storage/` directory (mirrored by
+    // a SQLite db we deliberately ignore). We read the JSON tree to match the
+    // existing file-parser pattern. On Windows opencode still uses the XDG-style
+    // ~/.local/share path even though it is a Bun app.
+
+    // Directories where opencode stores its session/message/part JSON tree
+    OPENCODE_STORAGE_DIRS: [
+        path.join(home, '.local', 'share', 'opencode', 'storage'),              // Win/Mac/Linux (XDG default)
+        path.join(home, '.config', 'opencode', 'storage')                       // alt layout
+    ],
+
+    // Path to the opencode config (providers, models, MCP servers, permissions)
+    OPENCODE_CONFIG_PATH: path.join(home, '.config', 'opencode', 'opencode.json'),
+
+
+    // ------------------------------------------------------------------------
+    // OPEN NOTEBOOK CONFIGURATION
+    // ------------------------------------------------------------------------
+    // open-notebook (lfnovo/open-notebook) is the open NotebookLM alternative.
+    // Its data lives in SurrealDB and is only reachable through its FastAPI REST
+    // API, so Memo-Ray ingests it as an API client (not a file parser). This is
+    // the base URL of that REST API (docker-compose default: localhost:5055).
+    // Override at runtime with MEMORAY_OPEN_NOTEBOOK_URL.
+    OPEN_NOTEBOOK_API_URL: 'http://localhost:5055'
 };
