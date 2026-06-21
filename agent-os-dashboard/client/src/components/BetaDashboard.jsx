@@ -582,11 +582,11 @@ export default function BetaDashboard({ onNavigateToSession, pendingTeleport, on
 
       {/* PHASE 1: Project Selection */}
       {phase === 'projects' && (
-        <div className="zen-project-phase" style={{ flexDirection: 'row', alignItems: 'flex-start', padding: '4rem', gap: '4rem' }}>
+        <div className="zen-project-phase" style={{ flexDirection: 'row', alignItems: 'stretch', padding: '4rem', gap: '4rem' }}>
           
-          <div style={{ flex: 1 }}>
-            <h1 className="zen-title">Mission Control</h1>
-            <p className="zen-subtitle">Select a workspace to review its agent activity.</p>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            <h1 className="zen-title" style={{ flexShrink: 0 }}>Mission Control</h1>
+            <p className="zen-subtitle" style={{ flexShrink: 0 }}>Select a workspace to review its agent activity.</p>
             <div className="zen-project-list">
               {(overview?.projects || []).map(proj => (
                 <div key={proj.name} className="zen-project-card" onClick={() => handleProjectSelect(proj)}>
@@ -663,11 +663,11 @@ export default function BetaDashboard({ onNavigateToSession, pendingTeleport, on
       {phase === 'sessions' && selectedProject && (
         <div className="zen-project-phase" style={{ paddingTop: '2rem' }}>
           
-          <h1 className="zen-title">
+          <h1 className="zen-title" style={{ flexShrink: 0 }}>
             {selectedProject.hasActive && <span className="zen-active-badge"></span>}
             {selectedProject.name}
           </h1>
-          <p className="zen-subtitle">Review worktrees and recent agent sessions.</p>
+          <p className="zen-subtitle" style={{ flexShrink: 0 }}>Review worktrees and recent agent sessions.</p>
           
           {/* Worktrees Section */}
           {selectedProject.worktrees && selectedProject.worktrees.length > 0 && (
@@ -696,7 +696,7 @@ export default function BetaDashboard({ onNavigateToSession, pendingTeleport, on
 
           {/* Sessions Section */}
           <div className="zen-session-list">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '0.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '0.5rem', flexShrink: 0 }}>
               <div className="zen-section-title" style={{ border: 'none', margin: 0, padding: 0 }}>All Sessions</div>
               <input 
                 type="text" 
