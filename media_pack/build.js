@@ -62,6 +62,15 @@ if (fs.existsSync(auditSrc)) {
   console.warn('⚠️  scratch/token_audit_v2.js not found — run mcp-server/run_benchmark_v2.js to generate it');
 }
 
+const auditGeminiSrc = path.join(PROJECT_ROOT, 'scratch', 'token_audit_gemini.js');
+const auditGeminiDest = path.join(DIST_DIR, 'token_audit_gemini.js');
+if (fs.existsSync(auditGeminiSrc)) {
+  fs.copyFileSync(auditGeminiSrc, auditGeminiDest);
+  console.log('✅ Copied token_audit_gemini.js');
+} else {
+  console.warn('⚠️  scratch/token_audit_gemini.js not found');
+}
+
 // 5. Copy the /review validation page (served at /memo-ray/review).
 const reviewSrc = path.join(MEDIA_PACK_DIR, 'review.html');
 const reviewDest = path.join(DIST_DIR, 'review.html');
@@ -70,6 +79,15 @@ if (fs.existsSync(reviewSrc)) {
   console.log('✅ Copied review.html');
 } else {
   console.error('❌ Could not find media_pack/review.html');
+}
+
+const reviewGeminiSrc = path.join(MEDIA_PACK_DIR, 'review-gemini.html');
+const reviewGeminiDest = path.join(DIST_DIR, 'review-gemini.html');
+if (fs.existsSync(reviewGeminiSrc)) {
+  fs.copyFileSync(reviewGeminiSrc, reviewGeminiDest);
+  console.log('✅ Copied review-gemini.html');
+} else {
+  console.error('❌ Could not find media_pack/review-gemini.html');
 }
 
 // 6. SEO assets: robots.txt, sitemap.xml, and the social share card.
@@ -89,6 +107,22 @@ if (fs.existsSync(cardSrc)) {
   console.log('✅ Copied social-card.png');
 } else {
   console.warn('⚠️  social card image not found');
+}
+
+const dashboardImgSrc = path.join(MEDIA_PACK_DIR, 'memoray_dashboard.png');
+const dashboardImgDest = path.join(DIST_DIR, 'memoray_dashboard.png');
+if (fs.existsSync(dashboardImgSrc)) {
+  fs.copyFileSync(dashboardImgSrc, dashboardImgDest);
+  console.log('✅ Copied memoray_dashboard.png');
+}
+
+const dashboardVidSrc = path.join(MEDIA_PACK_DIR, 'memoray_dashboard.mp4');
+const dashboardVidDest = path.join(DIST_DIR, 'memoray_dashboard.mp4');
+if (fs.existsSync(dashboardVidSrc)) {
+  fs.copyFileSync(dashboardVidSrc, dashboardVidDest);
+  console.log('✅ Copied memoray_dashboard.mp4');
+} else {
+  console.warn('⚠️  memoray_dashboard.mp4 not found');
 }
 
 console.log('Build complete! Ready for GitHub Pages deployment.');

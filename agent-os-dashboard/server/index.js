@@ -280,6 +280,130 @@ app.get('/api/ecosystem/manifest', (req, res) => {
     });
 });
 
+app.get('/api/heatmap-stats', (req, res) => {
+    const { entities, index } = store.load();
+    const days = {};
+    let totalSessions = 0;
+    let totalMessages = 0;
+    let totalTokens = 0;
+    let activeDaysCount = 0;
+    const modelCounts = {};
+    const hourCounts = new Array(24).fill(0);
+
+    (index.sessions || []).forEach(id => {
+        const session = entities.get(id);
+        if (!session) return;
+        
+        const date = new Date(session.timestamp);
+        const dayKey = date.toISOString().split('T')[0];
+        const hour = date.getHours();
+        
+        if (!days[dayKey]) {
+            days[dayKey] = { count: 0, nodes: 0, tokens: 0 };
+        }
+        
+        const childCount = (session.children_ids || []).length;
+        const tokens = session.metadata?.tokens || 0;
+        
+        days[dayKey].count++;
+        days[dayKey].nodes += childCount;
+        days[dayKey].tokens += tokens;
+        
+        totalSessions++;
+        totalMessages += childCount;
+        totalTokens += tokens;
+        hourCounts[hour]++;
+        
+        const model = session.metadata?.model;
+        if (model) {
+            modelCounts[model] = (modelCounts[model] || 0) + 1;
+        }
+    });
+
+    const sortedDays = Object.keys(days).sort();
+    activeDaysCount = sortedDays.length;
+    
+    let currentStreak = 0;
+    let longestStreak = 0;
+    
+    if (sortedDays.length > 0) {
+        let tempStreak = 1;
+        longestStreak = 1;
+        
+        for (let i = 1; i < sortedDays.length; i++) {
+            const prev = new Date(sortedDays[i-1]);
+            const curr = new Date(sortedDays[i]);
+            const diffDays = Math.round((curr - prev) / (1000 * 60 * 60 * 24));
+            
+            if (diffDays === 1) {
+                tempStreak++;
+                if (tempStreak > longestStreak) longestStreak = tempStreak;
+            } else {
+                tempStreak = 1;
+            }
+        }
+        
+        const today = new Date();
+        const yesterday = new Date(Date.now() - 86400000);
+        // Correctly shift by local timezone offset before ISO string
+        const localIso = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+        
+        const todayStr = localIso(today);
+        const yesterdayStr = localIso(yesterday);
+        
+        if (days[todayStr]) {
+            currentStreak = 1;
+            let checkDate = new Date(today);
+            while (true) {
+                checkDate.setDate(checkDate.getDate() - 1);
+                if (days[localIso(checkDate)]) currentStreak++;
+                else break;
+            }
+        } else if (days[yesterdayStr]) {
+            currentStreak = 1;
+            let checkDate = new Date(yesterday);
+            while (true) {
+                checkDate.setDate(checkDate.getDate() - 1);
+                if (days[localIso(checkDate)]) currentStreak++;
+                else break;
+            }
+        }
+    }
+    
+    let maxHourVal = 0;
+    let peakHour = 0;
+    for (let i = 0; i < 24; i++) {
+        if (hourCounts[i] > maxHourVal) {
+            maxHourVal = hourCounts[i];
+            peakHour = i;
+        }
+    }
+    const peakHourStr = peakHour === 0 ? '12 AM' : peakHour < 12 ? `${peakHour} AM` : peakHour === 12 ? '12 PM' : `${peakHour - 12} PM`;
+    
+    let favoriteModel = 'None';
+    let maxModelVal = 0;
+    for (const [model, count] of Object.entries(modelCounts)) {
+        if (count > maxModelVal) {
+            maxModelVal = count;
+            favoriteModel = model;
+        }
+    }
+    
+    res.json({
+        days,
+        stats: {
+            totalSessions,
+            totalMessages,
+            totalTokens,
+            activeDays: activeDaysCount,
+            currentStreak,
+            longestStreak,
+            peakHour: peakHourStr,
+            favoriteModel
+        }
+    });
+});
+
 const util = require('util');
 const execFileAsync = util.promisify(execFile);
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import OrganicGraph from './OrganicGraph';
 import GraphErrorBoundary from './GraphErrorBoundary';
+import HeatmapRadar from './HeatmapRadar';
 import '../zen.css';
 
 const API = import.meta.env.DEV
@@ -146,6 +147,7 @@ export default function BetaDashboard({ onNavigateToSession, pendingTeleport, on
   
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
+  const [heatmapDateFilter, setHeatmapDateFilter] = useState(null);
 
   // Timeline state for step-through
   const [timeline, setTimeline] = useState([]);
@@ -585,10 +587,31 @@ export default function BetaDashboard({ onNavigateToSession, pendingTeleport, on
         <div className="zen-project-phase" style={{ flexDirection: 'row', alignItems: 'stretch', padding: '4rem', gap: '4rem' }}>
           
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            <h1 className="zen-title" style={{ flexShrink: 0 }}>Mission Control</h1>
-            <p className="zen-subtitle" style={{ flexShrink: 0 }}>Select a workspace to review its agent activity.</p>
+
+            
+            <HeatmapRadar 
+              selectedDate={heatmapDateFilter} 
+              onDateSelect={setHeatmapDateFilter} 
+            />
+            
             <div className="zen-project-list">
-              {(overview?.projects || []).map(proj => (
+              {(overview?.projects || [])
+                .filter(proj => {
+                   if (!heatmapDateFilter) return true;
+                   let hasDate = false;
+                   for(const agentData of Object.values(proj.agents)) {
+                       for(const session of agentData.sessions) {
+                           const dLocal = new Date(session.timestamp - new Date().getTimezoneOffset() * 60000);
+                           if (dLocal.toISOString().split('T')[0] === heatmapDateFilter) {
+                               hasDate = true;
+                               break;
+                           }
+                       }
+                       if (hasDate) break;
+                   }
+                   return hasDate;
+                })
+                .map(proj => (
                 <div key={proj.name} className="zen-project-card" onClick={() => handleProjectSelect(proj)}>
                   <div style={{ flex: 1, minWidth: 0, paddingRight: '1rem' }}>
                     <div className="zen-project-name" title={proj.name}>

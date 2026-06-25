@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import HeatmapRadar from './HeatmapRadar';
 
 const API = import.meta.env.DEV
   ? `${import.meta.env.VITE_MEMORAY_API || 'http://localhost:3030'}/api`
@@ -7,6 +8,7 @@ const API = import.meta.env.DEV
 export default function AgentLifelog({ onTeleport }) {
     const [lifelog, setLifelog] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [heatmapDateFilter, setHeatmapDateFilter] = useState(null);
 
     useEffect(() => {
         const loadLifelog = () => {
@@ -36,6 +38,12 @@ export default function AgentLifelog({ onTeleport }) {
         );
     }
 
+    const filteredLifelog = lifelog.filter(item => {
+        if (!heatmapDateFilter) return true;
+        const dLocal = new Date(item.timestamp - new Date().getTimezoneOffset() * 60000);
+        return dLocal.toISOString().split('T')[0] === heatmapDateFilter;
+    });
+
     return (
         <div className="lifelog-dashboard">
             <div className="lifelog-header">
@@ -43,8 +51,15 @@ export default function AgentLifelog({ onTeleport }) {
                 <p>A unified timeline of Git commits and Agent actions across all workspaces.</p>
             </div>
             
+            <div style={{ padding: '0 2rem' }}>
+                <HeatmapRadar 
+                    selectedDate={heatmapDateFilter} 
+                    onDateSelect={setHeatmapDateFilter} 
+                />
+            </div>
+
             <div className="lifelog-feed">
-                {lifelog.map(item => {
+                {filteredLifelog.map(item => {
                     const isTeleportable = item.type === 'session' || (item.type === 'artifact' && item.sessionId);
                     return (
                     <div 
@@ -83,9 +98,9 @@ export default function AgentLifelog({ onTeleport }) {
                     );
                 })}
                 
-                {lifelog.length === 0 && (
+                {filteredLifelog.length === 0 && !loading && (
                     <div style={{ textAlign: 'center', color: 'var(--text-tertiary)', marginTop: '2rem' }}>
-                        No lifelog events found.
+                        No lifelog events found for this filter.
                     </div>
                 )}
             </div>

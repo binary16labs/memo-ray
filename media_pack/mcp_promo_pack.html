@@ -414,7 +414,9 @@
         <a href="#graphs">Session Graphs</a>
         <a href="#skills">Skill Extraction</a>
         <a href="#wizard">Setup Wizard</a>
-        <a href="./review">Review from Claude</a>
+        <a href="./review.html">Review from Claude</a>
+        <span style="color:var(--border-light)">|</span>
+        <a href="./review-gemini.html">Review from Gemini</a>
       </div>
     </div>
   </nav>
@@ -438,12 +440,19 @@
           </svg>
           Download for Windows
         </a>
-        <a href="./review">
+        <a href="./review.html">
           <svg height="20" width="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M9 11l3 3L22 4"></path>
             <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
           </svg>
           Review from Claude
+        </a>
+        <a href="./review-gemini.html">
+          <svg height="20" width="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 11l3 3L22 4"></path>
+            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+          </svg>
+          Review from Gemini
         </a>
       </div>
     </header>
@@ -459,6 +468,41 @@
       <p>
         Memo-Ray acts as an intermediary MCP server. It filters, aggregates, and summarizes your project's entire history locally. Instead of an LLM drowning in $O(N^2)$ raw file tokens, it queries Memo-Ray to instantly receive the precise insights and skills it needs to continue the work seamlessly.
       </p>
+    </div>
+
+    <div class="feature-test" style="margin-bottom: 4rem;">
+      <h2>Core Features</h2>
+      <ul class="skills-list">
+        <li><strong>Cross-Session Lineage</strong>: Automatically tracks the unbroken lineage of your AI's decisions, tool calls, and file modifications across multiple sessions and tools.</li>
+        <li><strong>Skill Extraction</strong>: Synthesizes repetitive workflows and common patterns into reusable "skills", significantly reducing redundant prompt engineering.</li>
+        <li><strong>Sliding Window Optimization</strong>: Queries only the most recent N steps from the graph to provide essential context while avoiding token expiration and saving costs.</li>
+        <li><strong>Local, Air-Gapped Operation</strong>: The entire session database lives safely on your machine without relying on external cloud providers.</li>
+      </ul>
+      <div style="margin-top: 2rem; text-align: center;">
+        <video src="./memoray_dashboard.mp4" autoplay loop muted playsinline style="max-width: 100%; border-radius: 8px; border: 1px solid var(--border-light); box-shadow: var(--shadow-soft);"></video>
+        <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.5rem;">The Memo-Ray Desktop Dashboard in Action</p>
+      </div>
+    </div>
+
+    <div class="story-section" id="install">
+      <h2>How to Run Memo-Ray</h2>
+      <p>Memo-Ray runs seamlessly as a local MCP server that your agents can query directly.</p>
+      
+      <div style="margin-top: 1.5rem;">
+        <h3 style="color: var(--text-main); font-family: var(--font-serif); margin-bottom: 0.5rem;">Option 1: Windows Native Quickstart</h3>
+        <p>If you're on Windows, you can start the full stack (backend server + client dashboard) with a single command:</p>
+        <div style="background: var(--bg-code); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-light); margin: 0.5rem 0 1.5rem 0;">
+          <code style="color: var(--accent-sage); font-family: var(--font-mono);">.\scripts\dev.ps1</code>
+        </div>
+      </div>
+      
+      <div>
+        <h3 style="color: var(--text-main); font-family: var(--font-serif); margin-bottom: 0.5rem;">Option 2: Run from GitHub (Cross-Platform)</h3>
+        <p>Clone the repository and run the standard Node development script, which automatically checks ports and boots everything:</p>
+        <div style="background: var(--bg-code); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-light); margin: 0.5rem 0;">
+          <code style="color: var(--accent-sage); font-family: var(--font-mono);">git clone https://github.com/binary16labs/memo-ray.git<br>cd memo-ray<br>npm install<br>npm run dev</code>
+        </div>
+      </div>
     </div>
 
     <h2 class="section-title" id="audit">The Token Tax Audit</h2>
