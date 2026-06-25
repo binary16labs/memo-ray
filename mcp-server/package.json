@@ -9,6 +9,8 @@
     "dev": "node --watch index.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.106.0",
+    "@anthropic-ai/tokenizer": "^0.0.4",
     "@modelcontextprotocol/sdk": "^0.6.0"
   }
 }

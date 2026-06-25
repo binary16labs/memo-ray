@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Review from Claude — Memo-Ray Token Audit (Independent Validation)</title>
+  <meta name="description" content="An independent, reproducible token audit of the Memo-Ray MCP server, measured with a real Claude tokenizer: ~41% input-token reduction on fair scenarios — and the cases where it doesn't help, shown honestly.">
+  <meta name="keywords" content="Memo-Ray, token audit, MCP server, Claude, Anthropic, token savings, count_tokens, benchmark, validation, AI agents">
+  <meta name="author" content="binary16labs">
+  <meta name="robots" content="index, follow">
+  <meta name="theme-color" content="#0B0E0D">
+  <link rel="canonical" href="https://binary16labs.github.io/memo-ray/review">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Memo-Ray">
+  <meta property="og:title" content="Review from Claude — Memo-Ray Token Audit">
+  <meta property="og:description" content="Independent, reproducible validation of Memo-Ray's token-save claim with a real Claude tokenizer. ~41% input-token reduction on fair scenarios; control and worst-case cases shown honestly.">
+  <meta property="og:url" content="https://binary16labs.github.io/memo-ray/review">
+  <meta property="og:image" content="https://binary16labs.github.io/memo-ray/social-card.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Review from Claude — Memo-Ray Token Audit">
+  <meta name="twitter:description" content="Independent, reproducible validation of Memo-Ray's token-save claim with a real Claude tokenizer.">
+  <meta name="twitter:image" content="https://binary16labs.github.io/memo-ray/social-card.png">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "Review from Claude — Memo-Ray Token Audit (Independent Validation)",
+    "description": "An independent, reproducible token audit of the Memo-Ray MCP server measured with a real Claude tokenizer.",
+    "about": { "@type": "SoftwareApplication", "name": "Memo-Ray", "applicationCategory": "DeveloperApplication" },
+    "author": { "@type": "Organization", "name": "binary16labs" },
+    "mainEntityOfPage": "https://binary16labs.github.io/memo-ray/review",
+    "url": "https://binary16labs.github.io/memo-ray/review"
+  }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-main: #0B0E0D; --bg-card: #121614; --bg-code: #1A1F1C;
+      --text-main: #E8ECE9; --text-muted: #8A968F; --border-light: rgba(149,165,149,0.15);
+      --accent-sage: #8b9c8b; --accent-taupe: #b8a898; --accent-rust: #db533f;
+      --font-body: 'Inter', sans-serif; --font-serif: 'Playfair Display', serif; --font-mono: 'JetBrains Mono', monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg-main); color: var(--text-main); font-family: var(--font-body); font-weight: 300; line-height: 1.6; padding: 3rem 1.5rem 6rem; }
+    .wrap { max-width: 860px; margin: 0 auto; }
+    a { color: var(--accent-sage); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .back { font-size: 0.85rem; color: var(--text-muted); display: inline-block; margin-bottom: 2rem; }
+    h1 { font-family: var(--font-serif); font-weight: 600; font-size: 2.4rem; line-height: 1.15; margin-bottom: 0.6rem; }
+    h1 .em { font-style: italic; color: var(--accent-taupe); }
+    .lede { color: var(--text-muted); font-size: 1.05rem; max-width: 60ch; margin-bottom: 2.5rem; }
+    .card { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: 12px; padding: 1.6rem 1.8rem; margin-bottom: 1.5rem; }
+    .eyebrow { font-family: var(--font-mono); font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent-sage); margin-bottom: 1rem; }
+    /* headline */
+    .headline { text-align: center; padding: 2.4rem 1.8rem; }
+    .headline .big { font-family: var(--font-serif); font-size: 4rem; font-weight: 600; color: var(--accent-sage); line-height: 1; }
+    .headline .sub { color: var(--text-muted); font-size: 0.95rem; margin-top: 0.6rem; }
+    .headline .tokens { font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-muted); margin-top: 0.4rem; }
+    /* methodology */
+    .meth { list-style: none; display: grid; gap: 0.7rem; }
+    .meth li { display: flex; gap: 0.7rem; font-size: 0.9rem; color: var(--text-muted); }
+    .meth li b { color: var(--text-main); font-weight: 500; }
+    .meth .tick { color: var(--accent-sage); }
+    .caveat { margin-top: 1rem; padding: 0.8rem 1rem; border-left: 2px solid var(--accent-taupe); background: rgba(184,168,152,0.06); font-size: 0.85rem; color: var(--text-muted); border-radius: 0 6px 6px 0; }
+    /* scenarios */
+    .scn { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: 12px; padding: 1.4rem 1.6rem; margin-bottom: 1rem; }
+    .scn-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+    .scn-name { font-size: 1.05rem; font-weight: 500; }
+    .tag { font-family: var(--font-mono); font-size: 0.62rem; letter-spacing: 0.08em; text-transform: uppercase; padding: 0.2rem 0.55rem; border-radius: 999px; white-space: nowrap; }
+    .tag-fair { background: rgba(139,156,139,0.15); color: var(--accent-sage); border: 1px solid rgba(139,156,139,0.3); }
+    .tag-worst { background: rgba(219,83,63,0.12); color: var(--accent-rust); border: 1px solid rgba(219,83,63,0.3); }
+    .scn-pct { font-family: var(--font-serif); font-size: 1.5rem; font-weight: 600; }
+    .scn-pct.win { color: var(--accent-sage); }
+    .scn-pct.nowin { color: var(--accent-rust); }
+    .bars { margin: 1rem 0 0.6rem; display: grid; gap: 0.5rem; }
+    .barrow { display: grid; grid-template-columns: 130px 1fr 90px; align-items: center; gap: 0.8rem; font-size: 0.78rem; }
+    .barrow .lbl { color: var(--text-muted); font-family: var(--font-mono); }
+    .track { height: 14px; background: var(--bg-code); border-radius: 7px; overflow: hidden; }
+    .fill { height: 100%; border-radius: 7px; transition: width 0.8s ease; }
+    .fill.no { background: linear-gradient(90deg, #b5432f, var(--accent-rust)); }
+    .fill.yes { background: linear-gradient(90deg, #6f7e6f, var(--accent-sage)); }
+    .val { font-family: var(--font-mono); text-align: right; color: var(--text-main); }
+    .scn-note { font-size: 0.82rem; color: var(--text-muted); margin-top: 0.7rem; }
+    .scn-note.control { color: var(--accent-taupe); }
+    /* repro */
+    pre { background: var(--bg-code); border: 1px solid var(--border-light); border-radius: 8px; padding: 1rem 1.2rem; font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-main); overflow-x: auto; }
+    .foot { color: var(--text-muted); font-size: 0.8rem; margin-top: 2rem; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <a class="back" href="./">&larr; Memo-Ray</a>
+    <h1>Token Audit — <span class="em">independent validation</span></h1>
+    <p class="lede">Does the Memo-Ray MCP layer actually cut the tokens an agent spends re-ingesting session history? This page reports a measured answer — including the cases where it doesn't.</p>
+
+    <div class="card headline">
+      <div class="eyebrow">Headline · fair scenarios only</div>
+      <div class="big" id="hl-pct">—</div>
+      <div class="sub">input-token reduction vs. direct file access</div>
+      <div class="tokens" id="hl-tokens"></div>
+    </div>
+
+    <div class="card">
+      <div class="eyebrow">Methodology</div>
+      <ul class="meth">
+        <li><span class="tick">✓</span><span><b>Real tokenizer.</b> Counts via <span id="m-counter" class="mono"></span> — not a <span class="mono">length/4</span> heuristic.</span></li>
+        <li><span class="tick">✓</span><span><b>No injected constants.</b> Only the actual payload each arm puts into context is counted; the shared prompt cancels.</span></li>
+        <li><span class="tick">✓</span><span><b>Input tokens only.</b> No model call is made, so output tokens are not estimated — and the &ldquo;Token Tax&rdquo; is an input-token claim.</span></li>
+        <li><span class="tick">✓</span><span><b>Strawman excluded.</b> Worst-case baselines are shown but kept out of the headline so the number can't be inflated.</span></li>
+      </ul>
+      <div class="caveat" id="m-caveat"></div>
+    </div>
+
+    <div class="eyebrow" style="margin: 2rem 0 0.8rem;">Per-scenario</div>
+    <div id="scenarios"></div>
+
+    <div class="card">
+      <div class="eyebrow">Reproduce it</div>
+      <pre># subscriber-friendly: offline Claude tokenizer, no key, no spend
+cd mcp-server &amp;&amp; node run_benchmark_v2.js
+
+# exact numbers: set a key (count_tokens is free)
+ANTHROPIC_API_KEY=sk-ant-... node run_benchmark_v2.js</pre>
+    </div>
+
+    <p class="foot" id="foot"></p>
+  </div>
+
+  <script src="./token_audit_v2.js"></script>
+  <script>
+    (function () {
+      var d = window.tokenAuditData;
+      var root = document.getElementById('scenarios');
+      if (!d) { root.innerHTML = '<div class="card">No audit data found. Run <span class="mono">node run_benchmark_v2.js</span> to generate it.</div>'; return; }
+
+      document.getElementById('hl-pct').textContent = d.headline.savingsPercent + '%';
+      document.getElementById('hl-tokens').textContent =
+        d.headline.totalNoMcpInputTokens.toLocaleString() + ' → ' + d.headline.totalMcpInputTokens.toLocaleString() +
+        ' tokens across ' + d.headline.fairScenarioCount + ' fair scenarios';
+      document.getElementById('m-counter').textContent = d.methodology.counter;
+      var cav = document.getElementById('m-caveat');
+      if (d.methodology.offlineCaveat) { cav.textContent = d.methodology.offlineCaveat; }
+      else { cav.textContent = 'Exact count_tokens numbers — authoritative for the configured model.'; }
+
+      d.summary.forEach(function (s) {
+        var pctOfNo = s.noMcpInputTokens > 0 ? Math.round((s.mcpInputTokens / s.noMcpInputTokens) * 100) : 0;
+        var win = s.mcpWins;
+        var isControl = s.baseline === 'fair' && !win;
+        var el = document.createElement('div');
+        el.className = 'scn';
+        el.innerHTML =
+          '<div class="scn-head">' +
+            '<div style="display:flex;align-items:center;gap:0.7rem;flex-wrap:wrap;">' +
+              '<span class="scn-name">' + s.name + '</span>' +
+              '<span class="tag ' + (s.baseline === 'fair' ? 'tag-fair">fair baseline' : 'tag-worst">worst-case baseline') + '</span>' +
+            '</div>' +
+            '<span class="scn-pct ' + (win ? 'win' : 'nowin') + '">' + s.savingsPercent + '%</span>' +
+          '</div>' +
+          '<div class="bars">' +
+            '<div class="barrow"><span class="lbl">direct files</span><div class="track"><div class="fill no" style="width:100%"></div></div><span class="val">' + s.noMcpInputTokens.toLocaleString() + '</span></div>' +
+            '<div class="barrow"><span class="lbl">via MCP</span><div class="track"><div class="fill yes" style="width:' + pctOfNo + '%"></div></div><span class="val">' + s.mcpInputTokens.toLocaleString() + '</span></div>' +
+          '</div>' +
+          '<div class="scn-note' + (isControl ? ' control' : '') + '">' +
+            (isControl ? '⚖ Control case: when the agent genuinely needs the entire history, the MCP layer has nothing to compress — and the audit says so. ' : '') +
+            (s.baseline === 'worst-case' ? '⚠ The direct-file baseline here loads every entity from disk (a strawman a real agent would avoid via search), so this win is reported but excluded from the headline. ' : '') +
+            'n=' + s.runs + ' run' + (s.runs === 1 ? '' : 's') + '.' +
+          '</div>';
+        root.appendChild(el);
+      });
+
+      document.getElementById('foot').textContent =
+        'Generated ' + new Date(d.generatedAt).toLocaleString() + ' · schema ' + d.schema;
+    })();
+  </script>
+</body>
+</html>
